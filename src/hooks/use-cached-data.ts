@@ -2,20 +2,25 @@ import { useEffect, useState } from "react";
 
 // Define types based on how they're used in the pages
 export interface Profile {
-  id: string;
-  name: string;
-  notes?: string;
-  proxy?: string;
-  groupId?: number;
-  status?: "running" | "stopped" | "error";
+  Id: string;
+  Name: string;
+  ProfilePath?: string;
+  JsonData?: string;
+  GroupId?: number | null;
   CreatedAt?: string;
+  LastRunAt?: string;
+  Group?: Group;
+  Notes?: string;
+  Proxy?: string;
+  Status?: "running" | "stopped" | "error";
   [key: string]: any;
 }
 
 export interface Group {
-  id: number;
-  name: string;
-  color?: string;
+  Id: number;
+  Name: string;
+  Description?: string;
+  Color?: string;
   CreatedAt?: string;
   [key: string]: any;
 }
@@ -80,7 +85,7 @@ export const useCachedData = (): CachedData => {
 
   // Profile local update functions
   const updateLocalProfile = (updatedProfile: Profile) => {
-    setProfiles(prev => prev.map(p => p.id === updatedProfile.id ? updatedProfile : p));
+    setProfiles(prev => prev.map(p => p.Id === updatedProfile.Id ? updatedProfile : p));
   };
 
   const addLocalProfile = (newProfile: Profile) => {
@@ -88,12 +93,12 @@ export const useCachedData = (): CachedData => {
   };
 
   const removeLocalProfile = (id: string) => {
-    setProfiles(prev => prev.filter(p => p.id !== id));
+    setProfiles(prev => prev.filter(p => p.Id !== id));
   };
 
   // Group local update functions
   const updateLocalGroup = (updatedGroup: Group) => {
-    setGroups(prev => prev.map(g => g.id === updatedGroup.id ? updatedGroup : g));
+    setGroups(prev => prev.map(g => g.Id === updatedGroup.Id ? updatedGroup : g));
   };
 
   const addLocalGroup = (newGroup: Group) => {
@@ -101,7 +106,7 @@ export const useCachedData = (): CachedData => {
   };
 
   const removeLocalGroup = (id: number) => {
-    setGroups(prev => prev.filter(g => g.id !== id));
+    setGroups(prev => prev.filter(g => g.Id !== id));
   };
 
   // Initial data fetch

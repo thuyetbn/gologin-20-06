@@ -44,7 +44,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { useCachedData } from "@/hooks/use-cached-data";
+import { Profile, useCachedData } from "@/hooks/use-cached-data";
 
 import { ArrowUpDown, Calendar, Download, FileText, Monitor, MoreHorizontal, Pencil, Play, PlayCircle, Plus, RotateCcw, Server, Square, Upload, WifiOff, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -63,21 +63,7 @@ interface BrowserStatus {
   errorCount: number;
 }
 
-// Redefine interfaces here for simplicity
-export interface Group {
-  Id: number;
-  Name?: string;
-}
-export interface Profile {
-  Id: string;
-  Name: string;
-  ProfilePath: string;
-  JsonData: string;
-  GroupId?: number;
-  CreatedAt?: string;
-  LastRunAt?: string;
-  Group?: Group;
-}
+// Import Group interface for local use
 function formatShortTime(dateString: string | null): string {
   if (!dateString) return 'Chưa chạy';
   
@@ -1143,7 +1129,7 @@ const ProfilesPage = () => {
                                 checked={isAllSelected}
                                 onCheckedChange={handleSelectAll}
                                 ref={isPartiallySelected ? (ref) => {
-                                  if (ref) ref.indeterminate = true;
+                                  if (ref) (ref as any).indeterminate = true;
                                 } : undefined}
                               />
                             ) : col.sortable ? (
