@@ -1,12 +1,13 @@
 import { exec as execNonPromise } from 'child_process';
 import decompress from 'decompress';
 import decompressUnzip from 'decompress-unzip';
-import { promises as _promises, createWriteStream } from 'fs';
+import { createWriteStream, promises as _promises } from 'fs';
 import { get } from 'https';
 import { homedir } from 'os';
 import { join } from 'path';
 import ProgressBar from 'progress';
 import util from 'util';
+import { createInterface } from 'readline';
 
 import { API_URL, getOS } from '../utils/common.js';
 
@@ -366,8 +367,6 @@ export class BrowserChecker {
         headers: {
           'Content-Type': 'application/json',
           'User-Agent': 'gologin-api',
-          'Accept': 'application/json',
-          'authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqd3RpZCI6IjY4M2RiY2YzMDgwNjExMjM3NzhhY2I5OCIsInR5cGUiOiJ1c2VyIiwic3ViIjoiNjIxNGFjNzM3YTEyMGY0ZWQ5NjkzNmE2In0.L7KrtFGgAsFhdAvxrxvR9WpFaxz1OIfR512LvhfdNB4'
         },
       }, (res) => {
         res.setEncoding('utf8');

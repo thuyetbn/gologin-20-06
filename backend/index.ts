@@ -15,8 +15,39 @@ const { GoLogin, GologinApi } = require('./gologin/gologin.js');
 
 const fs = require('fs').promises;
 
-// Hardcoded GoLogin token
-const GOLOGIN_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjE0YWM3MzdhMTIwZjRlZDk2OTM2YTYiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODNkYmQzMDllZjNmNzMyNjk1ODA3ZTYifQ.gUN3PNj6BkIwUm9urC3a2IuVniwvltW_OUvJkxXaDeo";
+// GoLogin token array for rotation and retry
+const GOLOGIN_TOKENS = [
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODdkMzVhMzZhNjE3M2FmMzkzOTU2NWEiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODdkMzYyOThjZmVlMzc1NjU4OWUxZTkifQ.8ZVr4Hhe43nudQj2FP6o6EAH2ZmVqqALflYsBCiMenk",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjE0YWM3MzdhMTIwZjRlZDk2OTM2YTYiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODNkYmQzMDllZjNmNzMyNjk1ODA3ZTYifQ.gUN3PNj6BkIwUm9urC3a2IuVniwvltW_OUvJkxXaDeo"
+];
+
+// Token rotation state
+let currentTokenIndex = 0;
+
+/**
+ * Get current token for API calls
+ */
+function getCurrentToken(): string {
+  return GOLOGIN_TOKENS[currentTokenIndex];
+}
+
+/**
+ * Rotate to next token for retry
+ */
+function rotateToNextToken(): string {
+  currentTokenIndex = (currentTokenIndex + 1) % GOLOGIN_TOKENS.length;
+  console.log(`🔄 Rotating to token ${currentTokenIndex + 1}/${GOLOGIN_TOKENS.length}`);
+  return getCurrentToken();
+}
+
+/**
+ * Reset token rotation to first token
+ */
+function resetTokenRotation(): void {
+  currentTokenIndex = 0;
+}
+
+
 
 // Global GL and GologinApi instances
 // let GL: any = null;  // Remove unused variable
@@ -518,7 +549,7 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     
     const { Profile } = await getDatabase();
     const profilesPath = store.get("dataPath") || app.getPath("userData");
-          const access_token = GOLOGIN_TOKEN;
+    const access_token = getCurrentToken();
     
     if (!access_token) {
       throw new Error("GoLogin token not found. Please configure it in Settings.");
@@ -536,64 +567,71 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     
     profileData.Name = trimmedName;
 
-    // Use original GoLogin API
-    GL = GologinApi({ token: access_token });
-    
     console.log(`Creating profile: ${profileData.Name}`);
     
-         // Create profile with retry mechanism
-     const profileGologin = await retryWithBackoff(
-       async () => {
-         const result = await GL.createProfileRandomFingerprint(profileData.Name);
-         if (!result || !result.id) {
-           throw new Error("Failed to create profile: Invalid response from GoLogin API.");
-         }
-         return result;
-       },
-       3, // maxRetries
-       2000, // baseDelay
-       'GoLogin profile creation failed'
-     );
+    // Create profile with token rotation
+    const profileGologin = await retryWithTokenRotation(
+      async (token: string) => {
+        const GL = GologinApi({ token });
+        const result = await GL.createProfileRandomFingerprint(profileData.Name);
+        if (!result || !result.id) {
+          throw new Error("Failed to create profile: Invalid response from GoLogin API.");
+        }
+        return result;
+      },
+      `Failed to create GoLogin profile for ${profileData.Name}`
+    );
      
-     profileId = profileGologin.id;
-
-    const goLogin = new GoLogin({token: access_token, profile_id: profileId, tmpdir: profilesPath });
+    profileId = profileGologin.id;
     
     console.log(`Profile created with id: ${profileId}`);
     
-         // Get profile data with retry mechanism
-     const newJsonData = await retryWithBackoff(
-       async () => await goLogin.getProfile(),
-       3, // maxRetries
-       1500, // baseDelay  
-       `Failed to get profile data for ${profileId}`
-     );
+    // Get profile data with token rotation
+    const newJsonData = await retryWithTokenRotation(
+      async (token: string) => {
+        const goLogin = new GoLogin({token, profile_id: profileId, tmpdir: profilesPath });
+        return await goLogin.getProfile();
+      },
+      `Failed to get profile data for ${profileId}`
+    );
      const existingJsonData = profileData.JsonData ? JSON.parse(profileData.JsonData) : {};
-     const JsonData = { ...newJsonData, ...existingJsonData };
+     const JsonData1 = {
+       "storageInfo": {
+          "isNewProfile": false,
+          "useStorageGateway": false,
+          "storageLink": ""
+        }
+      };
+    const JsonData = { ...newJsonData, ...existingJsonData, ...JsonData1 };
     profileData.JsonData = JSON.stringify(JsonData);
     
+    // Create GoLogin instance with current token for operations
+    const currentToken = getCurrentToken();
+    const goLogin = new GoLogin({token: currentToken, profile_id: profileId, tmpdir: profilesPath });
+
     // Clean up remote profile (we only need local copy)
     try {
+      const GL = GologinApi({ token: currentToken });
       await GL.deleteProfile(profileId);
     } catch (error: any) {
       console.warn(`Warning: Failed to delete remote profile ${profileId}:`, error.message);
       // Don't fail the entire operation for this
     }
     
-         // Download and extract profile with retry
-     await retryWithBackoff(
-       async () => {
-         await goLogin.downloadProfileAndExtract(profileData, true);
-         console.log(`Profile downloaded and extracted to: ${goLogin.profilePath()}`);
-       },
-       3, // maxRetries
-       3000, // baseDelay (longer for downloads)
-       `Failed to download profile ${profileId}`
-     );
+    // Download and extract profile with retry
+    await retryWithBackoff(
+      async () => {
+        await goLogin.downloadProfileAndExtract(profileData, true);
+        console.log(`Profile downloaded and extracted to: ${goLogin.profilePath()}`);
+      },
+      3, // maxRetries
+      3000, // baseDelay (longer for downloads)
+      `Failed to download profile ${profileId}`
+    );
     
     // Create startup script
     try {
-      await goLogin.createStartup(true, JsonData);
+      await goLogin.createStartup(false, JsonData);
     } catch (error: any) {
       console.warn(`Warning: Failed to create startup script for ${profileId}:`, error.message);
       // Don't fail for this, profile can still work
@@ -873,7 +911,7 @@ app.on('before-quit', () => {
 
 ipcMain.handle("profiles:launch", async (_event, profileId) => {
   const { Profile, profilesPath } = await getDatabase();
-  const token = GOLOGIN_TOKEN;
+  const token = getCurrentToken();
   if (!token) {
     throw new Error("GoLogin token not found. Please configure it in Settings.");
   }
@@ -899,8 +937,10 @@ ipcMain.handle("profiles:launch", async (_event, profileId) => {
     if (!profile) throw new Error("Profile not found");
     
     // Create startup with retry (reduced retry count to prevent multiple launches)
+
+    const profileData = JSON.parse(profile.get('JsonData') as string);
     await retryWithBackoff(
-      async () => await goLogin.createStartupCustom(true, JSON.parse(profile.get('JsonData') as string)),
+      async () => await goLogin.createStartupCustom(true, profileData),
       1, // maxRetries reduced to 1 to prevent multiple launches
       1000, // baseDelay
       `Failed to create startup for profile ${profileId}`
@@ -1053,7 +1093,7 @@ ipcMain.handle("profiles:restartBrowser", async (_event, profileId) => {
     
     // Start again - reuse launch logic
     const { Profile, profilesPath } = await getDatabase();
-    const token = GOLOGIN_TOKEN;
+    const token = getCurrentToken();
     if (!token) {
       throw new Error("GoLogin token not found. Please configure it in Settings.");
     }
@@ -1184,7 +1224,7 @@ ipcMain.handle("profiles:delete", async (_event, profileId) => {
 
 ipcMain.handle("profiles:exportCookie", async (_event, profileId: string) => {
   const { profilesPath } = await getDatabase();
-  const token = GOLOGIN_TOKEN;
+  const token = getCurrentToken();
   if (!token) {
     throw new Error("GoLogin token not found. Please configure it in Settings.");
   }
@@ -1558,6 +1598,50 @@ export async function retryWithBackoff<T>(
   }
   
   throw new Error(`${errorMessage} after ${maxRetries} attempts. Last error: ${lastError.message}`);
+}
+
+/**
+ * Retry GoLogin operations with token rotation
+ * Each retry uses a different token from the pool
+ */
+export async function retryWithTokenRotation<T>(
+  operation: (token: string) => Promise<T>,
+  errorMessage: string = 'GoLogin operation failed'
+): Promise<T> {
+  let lastError: Error = new Error('Unknown error');
+  resetTokenRotation(); // Start from first token
+  
+  for (let attempt = 1; attempt <= GOLOGIN_TOKENS.length; attempt++) {
+    const currentToken = getCurrentToken();
+    
+    try {
+      console.log(`🚀 ${errorMessage} (attempt ${attempt}/${GOLOGIN_TOKENS.length}) with token ${currentTokenIndex + 1}`);
+      return await operation(currentToken);
+    } catch (error: any) {
+      lastError = error;
+      
+      // Log the failed token attempt
+      console.error(`❌ Token ${currentTokenIndex + 1} failed:`, error.message);
+      
+      // Don't retry on certain types of errors
+      if (error.message?.includes('Profile name is required') || 
+          error.message?.includes('Invalid profile data')) {
+        throw error; // Don't retry validation errors
+      }
+      
+      if (attempt === GOLOGIN_TOKENS.length) {
+        break; // Last token, will throw below
+      }
+      
+      // Rotate to next token for retry
+      rotateToNextToken();
+      
+      // Small delay between token attempts
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  throw new Error(`${errorMessage} after trying all ${GOLOGIN_TOKENS.length} tokens. Last error: ${lastError.message}`);
 }
 
 // Add shell:open-path handler

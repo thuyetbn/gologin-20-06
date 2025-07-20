@@ -331,26 +331,31 @@ const ProfilesPage = () => {
     // Update proxy configuration
     if (proxyIdValue === "none") {
       jsonData.proxyEnabled = false;
-      jsonData.proxy = null;
+      jsonData.proxy = {
+        mode:  'none',
+        host: '',
+        port: 80,
+        username: '',
+        password: '',
+      };
     } else {
       const selectedProxy = proxies.find(p => String(p.id) === proxyIdValue);
       if (selectedProxy) {
         jsonData.proxyEnabled = true;
         jsonData.proxy = {
-          mode: selectedProxy.type,
-          host: selectedProxy.host,
-          port: selectedProxy.port,
-          username: selectedProxy.username || '',
-          password: selectedProxy.password || ''
+          mode: selectedProxy?.type || 'none',
+          host: selectedProxy?.host,
+          port: selectedProxy?.port || 80,
+          username: selectedProxy?.username || '',
+          password: selectedProxy?.password || ''
         };
       }
     }
-    console.log('jsonData', jsonData);
     const finalProfileData = {
       ...profileData,
       JsonData: JSON.stringify(jsonData)
     };
-
+    console.log('JsonData', jsonData);
     setIsSaving(true);
     try {
       if (currentProfile) {
