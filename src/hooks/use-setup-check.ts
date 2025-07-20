@@ -42,8 +42,16 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
 
             // Redirect to settings if setup required and not already on settings page
             if (isSetupRequired && !skipRedirect && router.pathname !== '/settings') {
-              console.log('Setup required, redirecting to settings...');
-              router.replace('/settings?setup=required');
+              console.log('Setup required, redirecting to settings...', {
+                isSetupRequired,
+                skipRedirect,
+                pathname: router.pathname,
+                dataPath
+              });
+              // Use setTimeout to ensure router is ready
+              setTimeout(() => {
+                router.replace('/settings?setup=required');
+              }, 100);
             }
           }
         } else {
@@ -68,7 +76,9 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
 
           // Redirect to settings on error
           if (!skipRedirect && router.pathname !== '/settings') {
-            router.replace('/settings?setup=required');
+            setTimeout(() => {
+              router.replace('/settings?setup=required');
+            }, 100);
           }
         }
       }
@@ -90,7 +100,9 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
 
             // Redirect to settings if not already there
             if (!skipRedirect && router.pathname !== '/settings') {
-              router.replace('/settings?setup=required');
+              setTimeout(() => {
+                router.replace('/settings?setup=required');
+              }, 100);
               toast.warning('Setup required: ' + data.message);
             }
           }
@@ -111,7 +123,9 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
 
             // Redirect to settings on error
             if (!skipRedirect && router.pathname !== '/settings') {
-              router.replace('/settings?setup=required');
+              setTimeout(() => {
+                router.replace('/settings?setup=required');
+              }, 100);
             }
           }
         });

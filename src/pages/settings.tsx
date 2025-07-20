@@ -67,6 +67,11 @@ const SettingsPage = () => {
       await window.api.invoke("settings:set", settings);
       setIsDirty(false);
       toast.success("Settings saved successfully!");
+      
+      // Refresh page to trigger setup check again
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (error: any) {
       toast.error(`Failed to save settings: ${error.message}`);
     } finally {
@@ -101,6 +106,16 @@ const SettingsPage = () => {
             if (finalPath !== selectedPath) {
               console.log(`Path normalized from "${selectedPath}" to "${finalPath}"`);
             }
+            
+            // Auto-save settings and refresh to clear setup state
+            setTimeout(async () => {
+              try {
+                await window.api.invoke("settings:set", newSettings);
+                window.location.reload();
+              } catch (error) {
+                console.error("Auto-save failed:", error);
+              }
+            }, 500);
           } else {
             throw new Error(dbSetupResult.message || "Failed to setup database");
           }
