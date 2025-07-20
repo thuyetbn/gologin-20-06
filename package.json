@@ -1,15 +1,15 @@
 {
-  "name": "sc-next-electron",
-  "displayName": "SC - Electron and Next",
-  "version": "11.0.1",
-  "description": "SC - Electron and Next",
+  "name": "gologin-manager",
+  "displayName": "GoLogin Manager - ThuyetBN",
+  "version": "1.0.0",
+  "description": "GoLogin Manager - ThuyetBN",
   "private": false,
   "license": "MIT",
   "main": "dist/backend/index.js",
   "author": {
-    "name": "Saulo Costa",
-    "email": "saulotarsobc@gmail.com",
-    "url": "https://github.com/saulotarsobc"
+    "name": "ThuyetBN",
+    "email": "thuyetbn@gmail.com",
+    "url": "https://github.com/thuyetbn"
   },
   "scripts": {
     "dev": "yarn build:backend && electron . --dev",
@@ -17,8 +17,10 @@
     "build:frontend": "next build src",
     "build:backend": "tsc -p backend && node scripts/copy-assets.js",
     "build": "yarn build:frontend && yarn build:backend",
+    "build:safe": "yarn build:frontend && yarn build:backend",
     "postinstall": "electron-builder install-app-deps",
     "dist": "yarn build && electron-builder",
+    "dist:safe": "yarn build:safe && electron-builder",
     "update:readme": "tsx scripts/update-readme.js"
   },
   "dependencies": {
@@ -74,8 +76,8 @@
     "typescript": "^5.8.3"
   },
   "build": {
-    "appId": "br.com.electron.next",
-    "productName": "SC - Electron and Next",
+    "appId": "com.thuyetbn.gologinmanager",
+    "productName": "GoLogin Manager - ThuyetBN",
     "files": [
       "dist"
     ],
