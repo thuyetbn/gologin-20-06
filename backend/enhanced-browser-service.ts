@@ -82,6 +82,45 @@ export class EnhancedBrowserService {
     this.initializeService();
   }
 
+  /**
+   * Get path to version info file
+   */
+  private getVersionInfoPath(): string {
+    return join(homedir(), '.gologin', 'browser-version.json');
+  }
+
+  /**
+   * Save browser version info to file
+   */
+  async saveBrowserVersionInfo(versionInfo: { version: string; majorVersion: string; installedAt: string }): Promise<void> {
+    try {
+      const versionPath = this.getVersionInfoPath();
+      const dir = join(versionPath, '..');
+      await fs.mkdir(dir, { recursive: true });
+      
+      await fs.writeFile(versionPath, JSON.stringify(versionInfo, null, 2));
+      console.log(`✅ Browser version info saved: ${versionInfo.version} (${versionInfo.majorVersion})`);
+    } catch (error) {
+      console.error('Failed to save browser version info:', error);
+    }
+  }
+
+  /**
+   * Load browser version info from file
+   */
+  async loadBrowserVersionInfo(): Promise<{ version: string; majorVersion: string; installedAt: string } | null> {
+    try {
+      const versionPath = this.getVersionInfoPath();
+      const data = await fs.readFile(versionPath, 'utf8');
+      const versionInfo = JSON.parse(data);
+      console.log(`📖 Loaded browser version info: ${versionInfo.version} (${versionInfo.majorVersion})`);
+      return versionInfo;
+    } catch (error) {
+      console.log('📝 No previous browser version info found, will use API check');
+      return null;
+    }
+  }
+
   private async initializeService(): Promise<void> {
     await this.initializeBackupDirectory();
     this.startHealthMonitoring();
@@ -251,6 +290,13 @@ export class EnhancedBrowserService {
       
       // Verify installation
       await fs.access(browserPath);
+
+      // Save version info after successful installation
+      await this.saveBrowserVersionInfo({
+        version: this.latestVersionInfo?.latestVersion || `${majorVersion}.0.0.0`,
+        majorVersion: majorVersion,
+        installedAt: new Date().toISOString()
+      });
 
       return browserPath;
     } catch (error) {
@@ -615,21 +661,22 @@ export class EnhancedBrowserService {
   }
 
   private startHealthMonitoring(): void {
-    // Check browser health every 30 minutes
-    this.healthCheckInterval = setInterval(async () => {
-      try {
-        const health = await this.performHealthCheck();
-        if (!health.isHealthy) {
-          console.warn(`Browser health issues detected:`, health.issues);
-          // Auto-repair if issues are simple
-          if (health.issues.length === 1 && health.issues[0].includes('permissions')) {
-            await this.repairBrowser();
-          }
-        }
-      } catch (error) {
-        console.error('Health monitoring check failed:', error);
-      }
-    }, 30 * 60 * 1000); // 30 minutes
+    // Health monitoring disabled to prevent auto-restart issues
+    console.log('⚠️ EnhancedBrowserService health monitoring disabled to prevent Chrome auto-restart');
+    // this.healthCheckInterval = setInterval(async () => {
+    //   try {
+    //     const health = await this.performHealthCheck();
+    //     if (!health.isHealthy) {
+    //       console.warn(`Browser health issues detected:`, health.issues);
+    //       // Auto-repair if issues are simple
+    //       if (health.issues.length === 1 && health.issues[0].includes('permissions')) {
+    //         await this.repairBrowser();
+    //       }
+    //     }
+    //   } catch (error) {
+    //     console.error('Health monitoring check failed:', error);
+    //   }
+    // }, 30 * 60 * 1000); // 30 minutes
   }
 
   private stopHealthMonitoring(): void {
@@ -709,6 +756,13 @@ export class EnhancedBrowserService {
       
       // Verify installation
       await fs.access(browserPath);
+      
+      // Save version info after successful installation
+      await this.saveBrowserVersionInfo({
+        version: this.latestVersionInfo?.latestVersion || `${majorVersion}.0.0.0`,
+        majorVersion: majorVersion,
+        installedAt: new Date().toISOString()
+      });
       
       console.log(`✅ Browser v${majorVersion} downloaded successfully to: ${browserPath}`);
       return browserPath;
@@ -801,6 +855,13 @@ export class EnhancedBrowserService {
       
       // Verify installation
       await fs.access(browserPath);
+
+      // Save version info after successful installation
+      await this.saveBrowserVersionInfo({
+        version: this.latestVersionInfo?.latestVersion || `${majorVersion}.0.0.0`,
+        majorVersion: majorVersion,
+        installedAt: new Date().toISOString()
+      });
 
       progressCallback?.(100, 'Hoàn thành!');
 

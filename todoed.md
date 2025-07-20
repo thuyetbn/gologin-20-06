@@ -72,7 +72,7 @@
   - [x] Implemented proper error messages cho unauthorized, limits, API failures
   - [x] Added cleanup mechanism khi profile creation fails
   - [x] Enhanced logging và error reporting
-  - [x] Added validation cho profile name và input data
+  - [x] ~~Added validation cho profile name và input data~~ (REMOVED)
   - [x] Separated critical errors from warnings
   
   **✅ Hoàn thành**: Profile creation giờ đây robust và user-friendly với proper error handling
@@ -84,36 +84,36 @@
   - [x] Added retry logic cho profile download và extraction 
   - [x] Added retry logic cho browser startup và spawning
   - [x] Added retry logic cho cookie export operations
-  - [x] Smart retry logic - không retry auth hoặc validation errors
+  - [x] Smart retry logic - không retry auth errors
   - [x] Configurable retry counts và delays cho different operations
   
   **✅ Hoàn thành**: API calls giờ đây resilient với automatic retry và exponential backoff
 
 ### 🛡️ **Security & Input Validation**
 
-- [x] **Added comprehensive input validation:**
-  - [x] Created validation utility library (`src/lib/validation.ts`)
-  - [x] Implemented validation rules cho profile names, group names, proxy data
-  - [x] Added specialized validation cho GoLogin tokens và file paths
-  - [x] Applied validation đến Profile creation form với real-time error display
-  - [x] Applied validation đến Proxy management form
-  - [x] Applied validation đến Settings form (GoLogin token, data paths)
-  - [x] Applied validation đến Groups form
-  - [x] Added input sanitization functions (trim, remove dangerous characters)
-  - [x] Implemented path sanitization để prevent directory traversal
+- [x] ~~**Added comprehensive input validation:**~~ (REMOVED)
+  - [x] ~~Created validation utility library (`src/lib/validation.ts`)~~ (REMOVED)
+  - [x] ~~Implemented validation rules cho profile names, group names, proxy data~~ (REMOVED)
+  - [x] ~~Added specialized validation cho GoLogin tokens và file paths~~ (REMOVED)
+  - [x] ~~Applied validation đến Profile creation form với real-time error display~~ (REMOVED)
+  - [x] ~~Applied validation đến Proxy management form~~ (REMOVED)
+  - [x] ~~Applied validation đến Settings form (GoLogin token, data paths)~~ (REMOVED)
+  - [x] ~~Applied validation đến Groups form~~ (REMOVED)
+  - [x] ~~Added input sanitization functions (trim, remove dangerous characters)~~ (REMOVED)
+  - [x] ~~Implemented path sanitization để prevent directory traversal~~ (REMOVED)
   
-  **✅ Hoàn thành**: All forms giờ đây có robust validation và sanitization để prevent malicious inputs
+  **Note**: Validation system was removed to simplify application architecture.
 
 - [x] **Enhanced backend input sanitization:**
   - [x] Added sanitizeInput function cho general text cleaning
   - [x] Added sanitizePath function để prevent directory traversal attacks
-  - [x] Added sanitizeProfileName function cho profile name validation
+  - [x] ~~Added sanitizeProfileName function cho profile name validation~~ (REMOVED)
   - [x] Applied sanitization đến profile creation và update handlers
   - [x] Applied sanitization đến group creation và update handlers  
   - [x] Applied sanitization đến proxy data (name, host, username)
   - [x] Applied sanitization đến settings data (dataPath, gologinToken, defaultProxy)
   - [x] Preserved special characters trong passwords
-  - [x] Added length validation cho profile names và group names
+  - [x] ~~Added length validation cho profile names và group names~~ (REMOVED)
   
   **✅ Hoàn thành**: Backend giờ đây có comprehensive input sanitization để protect against injection attacks
 
@@ -121,7 +121,7 @@
 
 ### **🔒 Security Improvements:**
 - Eliminated hardcoded credentials (critical vulnerability)
-- Added comprehensive input validation và sanitization
+- ~~Added comprehensive input validation và sanitization~~ (REMOVED)
 - Implemented secure credential storage
 - Protected against injection attacks và directory traversal
 
@@ -138,7 +138,7 @@
 - Enhanced TypeScript interfaces
 
 ### **👤 User Experience:**
-- Real-time form validation với helpful error messages
+- ~~Real-time form validation với helpful error messages~~ (REMOVED)
 - Better error reporting cho API failures
 - Secure token management trong Settings
 - Input sanitization để prevent user errors
@@ -146,7 +146,7 @@
 ## 🚀 **NEXT STEPS** (Remaining PRIORITY HIGH Tasks)
 
 1. **Refactor GoLogin integration** - Complete service pattern implementation (partially done - GoLoginService created)
-2. **Secure credential storage** - Additional encryption features cho sensitive data  
+2. ~~**Secure credential storage** - Additional encryption features cho sensitive data~~ (REMOVED - not needed)  
 3. **Comprehensive logging** - Advanced logging system cho backend operations
 
 ---

@@ -35,10 +35,12 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { sanitizeInput, validateForm, validationRules } from "@/lib/validation";
+import { useCachedData } from "@/hooks/use-cached-data";
+
 import { ArrowUpDown, Folder, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useDebounce } from "use-debounce";
 
 // Redefine interface here for simplicity as it's moved to backend
 export interface Group {
@@ -50,37 +52,59 @@ export interface Group {
 }
 
 const GroupsPage = () => {
-  const [groups, setGroups] = useState<Group[]>([]);
+  // Use optimized cached data hook
+  const {
+    groups: allGroups,
+    profiles,
+    isLoading,
+    refreshCache,
+    updateLocalGroup,
+    addLocalGroup,
+    removeLocalGroup
+  } = useCachedData();
+
+  // UI state
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [currentGroup, setCurrentGroup] = useState<Group | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  const fetchGroups = async () => {
-    try {
-      const fetchedGroups = await window.api.invoke("groups:get");
-      // Get profile counts for each group
-      const profiles = await window.api.invoke("profiles:get");
-      
-      const groupsWithCount = fetchedGroups.map((group: Group) => ({
-        ...group,
-        ProfileCount: profiles.filter((p: any) => p.GroupId === group.Id).length,
-      }));
-      
-      setGroups(groupsWithCount || []);
-    } catch (error) {
-      console.error("Failed to fetch groups:", error);
-      toast.error("Failed to fetch groups");
+  // Loading states
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
+
+  // Pagination state  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
+
+  // Process groups with profile counts and filtering
+  const processedGroups = useMemo(() => {
+    // Add profile counts to groups
+    const groupsWithCount = allGroups.map((group: Group) => ({
+      ...group,
+      ProfileCount: profiles.filter((p: any) => p.GroupId === group.Id).length,
+    }));
+
+    // Apply search filter
+    if (debouncedSearchQuery) {
+      return groupsWithCount.filter((group) =>
+        group.Name?.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+      );
     }
+
+    return groupsWithCount;
+  }, [allGroups, profiles, debouncedSearchQuery]);
+
+  // Replace fetchAllData with refreshCache
+  const fetchAllData = async () => {
+    console.log('🔄 [Groups] Refreshing cached data...');
+    await refreshCache();
   };
 
-  useEffect(() => {
-    fetchGroups();
-  }, []);
-
-  const filteredGroups = groups.filter((group) =>
-    group.Name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Remove initial data loading useEffect - handled by useCachedData
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -90,45 +114,59 @@ const GroupsPage = () => {
       name: formData.get("name") as string,
     };
 
-    // Validate form data
-    const errors = validateForm(rawData, {
-      name: validationRules.groupName,
-    });
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      toast.error("Please correct the validation errors");
+    // Basic input processing
+    setFormErrors({});
+    
+    if (!rawData.name || rawData.name.trim().length === 0) {
+      setFormErrors({ name: "Group name is required" });
       return;
     }
 
-    // Clear errors and sanitize data
-    setFormErrors({});
+    const trimmedName = rawData.name.trim();
+    if (trimmedName.length > 30) {
+      setFormErrors({ name: "Group name must be 30 characters or less" });
+      return;
+    }
+
     const groupData = {
-      Name: sanitizeInput(rawData.name),
+      Name: trimmedName
     };
 
+    setIsSaving(true);
     try {
       if (currentGroup) {
-        await window.api.invoke("groups:update", { ...currentGroup, ...groupData });
+        const updatedGroup = { ...currentGroup, ...groupData };
+        await window.api.invoke("groups:update", updatedGroup);
+        // Update local cache for instant UI feedback
+        updateLocalGroup(updatedGroup);
         toast.success("Group updated successfully!");
       } else {
-        await window.api.invoke("groups:create", groupData);
+        const newGroup = await window.api.invoke("groups:create", groupData);
+        // Add to local cache for instant UI feedback  
+        addLocalGroup(newGroup);
         toast.success("Group created successfully!");
       }
-      await fetchGroups();
       closeDialog();
     } catch (error: any) {
       toast.error(error.message || "Failed to save group");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDelete = async (groupId: number) => {
+    setDeletingGroupId(groupId);
     try {
       await window.api.invoke("groups:delete", groupId);
+      // Remove from local cache for instant UI feedback
+      removeLocalGroup(groupId);
       toast.success("Group deleted successfully!");
-      await fetchGroups();
     } catch (error: any) {
-      toast.error(`Failed to delete group: ${error.message}`);
+      toast.error(error.message || "Failed to delete group");
+      // Refresh cache if delete failed
+      await refreshCache();
+    } finally {
+      setDeletingGroupId(null);
     }
   };
 
@@ -178,9 +216,19 @@ const GroupsPage = () => {
                 <DropdownMenuItem
                   onClick={() => handleDelete(group.Id)}
                   className="text-red-500"
+                  disabled={deletingGroupId === group.Id}
                 >
+                  {deletingGroupId === group.Id ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
+                    </>
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -210,7 +258,7 @@ const GroupsPage = () => {
             <div>
               <CardTitle>Groups</CardTitle>
               <CardDescription>
-                Organize your profiles into groups. ({filteredGroups.length} groups)
+                Organize your profiles into groups. ({allGroups.length} groups)
               </CardDescription>
             </div>
             <Button onClick={() => openDialog()}>
@@ -248,7 +296,7 @@ const GroupsPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredGroups.map((group) => (
+                {processedGroups.map((group) => (
                   <TableRow key={group.Id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
@@ -286,9 +334,19 @@ const GroupsPage = () => {
                           <DropdownMenuItem
                             onClick={() => handleDelete(group.Id)}
                             className="text-red-500"
+                            disabled={deletingGroupId === group.Id}
                           >
+                            {deletingGroupId === group.Id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete
+                              </>
+                            )}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -301,13 +359,13 @@ const GroupsPage = () => {
 
           {/* Mobile Card View */}
           <div className="lg:hidden grid gap-4 sm:grid-cols-2">
-            {filteredGroups.map((group) => (
+            {processedGroups.map((group) => (
               <GroupCard key={group.Id} group={group} />
             ))}
           </div>
 
           {/* Empty State */}
-          {filteredGroups.length === 0 && (
+          {processedGroups.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <Folder className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p>No groups found</p>
@@ -320,7 +378,7 @@ const GroupsPage = () => {
         
         <CardFooter>
           <div className="text-xs text-muted-foreground">
-            Showing <strong>{filteredGroups.length}</strong> of <strong>{groups.length}</strong> groups.
+            Showing <strong>{processedGroups.length}</strong> of <strong>{allGroups.length}</strong> groups.
           </div>
         </CardFooter>
       </Card>
@@ -362,10 +420,19 @@ const GroupsPage = () => {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeDialog}>
+              <Button type="button" variant="outline" onClick={closeDialog} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button type="submit">Save</Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

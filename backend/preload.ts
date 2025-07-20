@@ -21,13 +21,19 @@ type Channels =
   | "profiles:launch"
   | "profiles:stop"
   | "profiles:getRunning"
+  | "profiles:getAllBrowserStatuses"
   | "profiles:exportCookie"
   | "profiles:importCookie"
+  | "profiles:restartBrowser"
   // Browser Service channels
   | "browser:get-info"
   | "browser:update-with-progress"
+  | "browser-status-changed"
   // Shell operations
   | "shell:open-path"
+  // Database operations
+  | "data:setupDatabase"
+  | "database:test"
   // Credential Management channels
   | "credentials:store"
   | "credentials:get"
@@ -91,6 +97,15 @@ export const api = {
    */
   invoke: (channel: Channels, args?: unknown): Promise<any> => {
     return ipcRenderer.invoke(channel, args);
+  },
+
+  /**
+   * Removes all listeners for a specific channel.
+   *
+   * @param {Channels} channel - The name of the IPC channel to remove listeners from.
+   */
+  removeAllListeners: (channel: Channels): void => {
+    ipcRenderer.removeAllListeners(channel);
   },
 };
 

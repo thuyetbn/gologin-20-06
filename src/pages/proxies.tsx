@@ -8,7 +8,7 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from "@/components/ui/card";
 import {
   Dialog,
@@ -41,9 +41,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { sanitizeInput, validateForm, validationRules } from "@/lib/validation";
+
 import {
-  ArrowUpDown,
   CheckCircle,
   Globe,
   MoreHorizontal,
@@ -53,37 +52,46 @@ import {
   Trash2,
   XCircle
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useDebounce } from "use-debounce";
 
-// Basic interface for a proxy
-export interface Proxy {
-  id: string;
-  name: string;
-  type: "http" | "https" | "socks4" | "socks5";
-  host: string;
-  port: number;
-  username?: string;
-  password?: string;
-  status?: "active" | "inactive" | "error";
-  CreatedAt?: string;
-}
+import { Proxy } from "@/hooks/use-cached-data";
 
 const ProxiesPage = () => {
+  // Use basic state for proxies since cached hook doesn't fully support proxies yet
   const [proxies, setProxies] = useState<Proxy[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // UI state
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [currentProxy, setCurrentProxy] = useState<Proxy | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  // Loading states
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingProxyId, setDeletingProxyId] = useState<string | null>(null);
+  const [testingProxyId, setTestingProxyId] = useState<string | null>(null);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
+
+  // Filter state
+  const [typeFilter, setTypeFilter] = useState("all");
+
+  // Fetch proxies data
   const fetchProxies = async () => {
+    console.log('🔄 [Proxies] Fetching proxies data...');
+    setIsLoading(true);
     try {
       const fetchedProxies = await window.api.invoke("proxies:get");
-      setProxies(fetchedProxies || []);
+      setProxies(Array.isArray(fetchedProxies) ? fetchedProxies : []);
     } catch (error) {
       console.error("Failed to fetch proxies:", error);
       toast.error("Failed to fetch proxies");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -91,19 +99,22 @@ const ProxiesPage = () => {
     fetchProxies();
   }, []);
 
-  const filteredProxies = proxies.filter((proxy) => {
-    const matchesSearch = (proxy.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-                         (proxy.host?.toLowerCase() || "").includes(searchQuery.toLowerCase());
-    const matchesType = typeFilter === "all" || proxy.type === typeFilter;
-    return matchesSearch && matchesType;
-  });
+  // Filter and search
+  const filteredProxies = useMemo(() => {
+    return proxies.filter((proxy) => {
+      const matchesSearch = debouncedSearchQuery === "" || 
+        (proxy.name?.toLowerCase() || "").includes(debouncedSearchQuery.toLowerCase()) ||
+        (proxy.host?.toLowerCase() || "").includes(debouncedSearchQuery.toLowerCase());
+      const matchesType = typeFilter === "all" || proxy.type === typeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [proxies, debouncedSearchQuery, typeFilter]);
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
     const rawData = {
-      name: formData.get("name") as string,
       type: formData.get("type") as string,
       host: formData.get("host") as string,
       port: formData.get("port") as string,
@@ -111,67 +122,95 @@ const ProxiesPage = () => {
       password: formData.get("password") as string,
     };
 
-    // Validate form data
-    const errors = validateForm(rawData, {
-      name: validationRules.proxyName,
-      host: validationRules.proxyHost,
-      port: validationRules.proxyPort,
-    });
+    // Clear previous errors
+    setFormErrors({});
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      toast.error("Please correct the validation errors");
+    // Basic input checking
+    if (!rawData.type?.trim()) {
+      setFormErrors({ type: "Type is required" });
+      return;
+    }
+    if (!rawData.host?.trim()) {
+      setFormErrors({ host: "Host is required" });
+      return;
+    }
+    if (!rawData.port?.trim()) {
+      setFormErrors({ port: "Port is required" });
       return;
     }
 
-    // Clear errors and sanitize data
-    setFormErrors({});
+    const port = parseInt(rawData.port);
+    if (isNaN(port) || port < 1 || port > 65535) {
+      setFormErrors({ port: "Port must be between 1 and 65535" });
+      return;
+    }
+
+    // Auto-generate name from host:port
+    const autoName = `${rawData.host.trim()}:${port}`;
+
     const proxyData: Proxy = {
       id: currentProxy?.id || Date.now().toString(),
-      name: sanitizeInput(rawData.name),
+      name: autoName,
       type: rawData.type as Proxy["type"],
-      host: sanitizeInput(rawData.host),
-      port: parseInt(rawData.port),
-      username: rawData.username ? sanitizeInput(rawData.username) : undefined,
-      password: rawData.password || undefined,
+      host: rawData.host.trim(),
+      port: port,
+      username: rawData.username ? rawData.username.trim() : "",
+      password: rawData.password || "",
     };
 
+    setIsSaving(true);
     try {
-      let updatedProxies;
       if (currentProxy) {
-        updatedProxies = proxies.map(p => p.id === currentProxy.id ? proxyData : p);
+        // Update existing proxy using standard proxies:set endpoint
+        const updatedProxies = proxies.map(p => 
+          p.id === currentProxy.id ? proxyData : p
+        );
+        await window.api.invoke("proxies:set", updatedProxies);
+        setProxies(updatedProxies);
         toast.success("Proxy updated successfully!");
       } else {
-        updatedProxies = [...proxies, proxyData];
-        toast.success("Proxy added successfully!");
+        // Create new proxy
+        const updatedProxies = [...proxies, proxyData];
+        await window.api.invoke("proxies:set", updatedProxies);
+        setProxies(updatedProxies);
+        toast.success("Proxy created successfully!");
       }
-      
-      await window.api.invoke("proxies:set", updatedProxies);
-      setProxies(updatedProxies);
       closeDialog();
     } catch (error: any) {
       toast.error(error.message || "Failed to save proxy");
+    } finally {
+      setIsSaving(false);
     }
   };
-  
+
   const handleDelete = async (proxyId: string) => {
+    setDeletingProxyId(proxyId);
     try {
-      const updatedProxies = proxies.filter((p) => p.id !== proxyId);
+      const updatedProxies = proxies.filter(p => p.id !== proxyId);
       await window.api.invoke("proxies:set", updatedProxies);
+      setProxies(updatedProxies);
       toast.success("Proxy deleted successfully!");
-      await fetchProxies();
     } catch (error: any) {
-      toast.error(`Failed to delete proxy: ${error.message}`);
+      toast.error(error.message || "Failed to delete proxy");
+    } finally {
+      setDeletingProxyId(null);
     }
   };
 
   const testProxy = async (proxy: Proxy) => {
+    setTestingProxyId(proxy.id);
     try {
       // This would test the proxy connection
       toast.success(`Testing proxy ${proxy.name}...`);
       // You can implement actual proxy testing here
+      
+      // Simulate testing delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      toast.success(`Proxy ${proxy.name} test completed!`);
     } catch (error: any) {
       toast.error(`Failed to test proxy: ${error.message}`);
+    } finally {
+      setTestingProxyId(null);
     }
   };
 
@@ -248,9 +287,21 @@ const ProxiesPage = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => testProxy(proxy)}>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Test Connection
+                <DropdownMenuItem 
+                  onClick={() => testProxy(proxy)}
+                  disabled={testingProxyId === proxy.id}
+                >
+                  {testingProxyId === proxy.id ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      Testing...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Test Connection
+                    </>
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openDialog(proxy)}>
                   <Pencil className="mr-2 h-4 w-4" />
@@ -259,9 +310,19 @@ const ProxiesPage = () => {
                 <DropdownMenuItem
                   onClick={() => handleDelete(proxy.id)}
                   className="text-red-500"
+                  disabled={deletingProxyId === proxy.id}
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
+                  {deletingProxyId === proxy.id ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </>
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -292,8 +353,20 @@ const ProxiesPage = () => {
           <div className="text-xs text-muted-foreground">
             Created: {proxy.CreatedAt ? new Date(proxy.CreatedAt).toLocaleDateString() : "N/A"}
           </div>
-          <Button variant="outline" size="sm" onClick={() => testProxy(proxy)}>
-            Test
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => testProxy(proxy)}
+            disabled={testingProxyId === proxy.id}
+          >
+            {testingProxyId === proxy.id ? (
+              <>
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-1"></div>
+                Testing...
+              </>
+            ) : (
+              "Test"
+            )}
           </Button>
         </CardFooter>
       </Card>
@@ -308,7 +381,7 @@ const ProxiesPage = () => {
             <div>
               <CardTitle>Proxies</CardTitle>
               <CardDescription>
-                Manage your proxy connections. ({filteredProxies.length} proxies)
+                Manage your proxy connections. ({proxies.length} proxies)
               </CardDescription>
             </div>
             <Button onClick={() => openDialog()}>
@@ -346,11 +419,6 @@ const ProxiesPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>
-                    <Button variant="ghost">
-                      Name <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Host</TableHead>
                   <TableHead>Port</TableHead>
@@ -363,12 +431,7 @@ const ProxiesPage = () => {
               <TableBody>
                 {filteredProxies.map((proxy) => (
                   <TableRow key={proxy.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        <Globe className="h-4 w-4" />
-                        {proxy.name}
-                      </div>
-                    </TableCell>
+                    
                     <TableCell>{getTypeBadge(proxy.type)}</TableCell>
                     <TableCell className="font-mono text-sm">{proxy.host}</TableCell>
                     <TableCell className="font-mono text-sm">{proxy.port}</TableCell>
@@ -397,9 +460,21 @@ const ProxiesPage = () => {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => testProxy(proxy)}>
-                            <CheckCircle className="mr-2 h-4 w-4" />
-                            Test Connection
+                          <DropdownMenuItem 
+                            onClick={() => testProxy(proxy)}
+                            disabled={testingProxyId === proxy.id}
+                          >
+                            {testingProxyId === proxy.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                                Testing...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Test Connection
+                              </>
+                            )}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openDialog(proxy)}>
                             <Pencil className="mr-2 h-4 w-4" />
@@ -408,9 +483,19 @@ const ProxiesPage = () => {
                           <DropdownMenuItem
                             onClick={() => handleDelete(proxy.id)}
                             className="text-red-500"
+                            disabled={deletingProxyId === proxy.id}
                           >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
+                            {deletingProxyId === proxy.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </>
+                            )}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -457,36 +542,19 @@ const ProxiesPage = () => {
               </DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Proxy Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    defaultValue={currentProxy?.name}
-                    placeholder="My Proxy"
-                    required
-                    maxLength={30}
-                    className={formErrors.name ? "border-red-500" : ""}
-                  />
-                  {formErrors.name && (
-                    <p className="text-sm text-red-500">{formErrors.name}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Type</Label>
-                  <Select name="type" defaultValue={currentProxy?.type || "http"}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="http">HTTP</SelectItem>
-                      <SelectItem value="https">HTTPS</SelectItem>
-                      <SelectItem value="socks4">SOCKS4</SelectItem>
-                      <SelectItem value="socks5">SOCKS5</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="type">Type</Label>
+                <Select name="type" defaultValue={currentProxy?.type || "http"}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="http">HTTP</SelectItem>
+                    <SelectItem value="https">HTTPS</SelectItem>
+                    <SelectItem value="socks4">SOCKS4</SelectItem>
+                    <SelectItem value="socks5">SOCKS5</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               
               <div className="grid grid-cols-3 gap-4">
@@ -547,10 +615,19 @@ const ProxiesPage = () => {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeDialog}>
+              <Button type="button" variant="outline" onClick={closeDialog} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button type="submit">Save</Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -43,7 +43,9 @@ export class GoLoginService {
   private healthCheckInterval: NodeJS.Timeout | null = null;
   
   constructor() {
-    this.startHealthMonitoring();
+    // Health monitoring disabled to prevent duplicate with main service
+    // this.startHealthMonitoring();
+    console.log('⚠️ GoLoginService health monitoring disabled to prevent conflicts');
   }
 
   /**
@@ -80,22 +82,19 @@ export class GoLoginService {
   }
 
   /**
-   * Validate and sanitize profile name
+   * Basic validation for profile name
    */
-  private sanitizeProfileName(name: string): string {
+  private validateProfileName(name: string): string {
     if (!name || name.trim().length === 0) {
       throw new Error("Profile name is required.");
     }
     
-    const sanitized = name.replace(/[^a-zA-Z0-9\s\-_\.]/g, '').trim().replace(/\s+/g, ' ');
-    if (sanitized.length === 0) {
-      throw new Error("Profile name contains only invalid characters.");
-    }
-    if (sanitized.length > 50) {
+    const trimmed = name.trim();
+    if (trimmed.length > 50) {
       throw new Error("Profile name must be 50 characters or less.");
     }
     
-    return sanitized;
+    return trimmed;
   }
 
   /**
@@ -125,8 +124,9 @@ export class GoLoginService {
   }
 
   /**
-   * Start health monitoring for running processes
+   * Start health monitoring for running processes - DISABLED
    */
+  /*
   private startHealthMonitoring(): void {
     this.healthCheckInterval = setInterval(() => {
       const profilesToCleanup: string[] = [];
@@ -146,6 +146,7 @@ export class GoLoginService {
       });
     }, 5000);
   }
+  */
 
   /**
    * Stop health monitoring
@@ -172,8 +173,8 @@ export class GoLoginService {
       const access_token = this.getAccessToken();
       const profilesPath = this.getProfilesPath();
       
-      // Validate and sanitize profile name
-      profileData.Name = this.sanitizeProfileName(profileData.Name);
+          // Basic validation for profile name
+    profileData.Name = this.validateProfileName(profileData.Name);
 
       GL = GologinApi({ token: access_token });
       
@@ -203,15 +204,23 @@ export class GoLoginService {
       
       console.log(`Profile created with id: ${profileId}`);
       
+      // Save existing JsonData before getting new data
+      const existingJsonData = profileData.JsonData ? JSON.parse(profileData.JsonData) : {};
+      
       // Get profile data with retry mechanism
-      const JsonData = await retryWithBackoff(
+      const newJsonData = await retryWithBackoff(
         async () => await goLogin.getProfile(),
         3, // maxRetries
         1500, // baseDelay  
         `Failed to get profile data for ${profileId}`
       );
       
-      profileData.JsonData = JSON.stringify(JsonData);
+      // Merge existing data with new data (new data takes priority)
+      const mergedJsonData = { ...newJsonData, ...existingJsonData };
+      console.log('mergedJsonData', mergedJsonData);
+      console.log('existingJsonData', existingJsonData);
+
+      profileData.JsonData = JSON.stringify(mergedJsonData);
       
       // Clean up remote profile (we only need local copy)
       try {
@@ -234,7 +243,7 @@ export class GoLoginService {
       
       // Create startup script
       try {
-        await goLogin.createStartup(true, JsonData);
+        await goLogin.createStartup(true, mergedJsonData);
       } catch (error: any) {
         console.warn(`Warning: Failed to create startup script for ${profileId}:`, error.message);
         // Don't fail for this, profile can still work

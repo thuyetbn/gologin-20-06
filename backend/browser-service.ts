@@ -561,21 +561,22 @@ export class BrowserService {
   }
 
   private startHealthMonitoring(): void {
-    // Check browser health every 30 minutes
-    this.healthCheckInterval = setInterval(async () => {
-      try {
-        const health = await this.performHealthCheck();
-        if (!health.isHealthy) {
-          console.warn(`Browser health issues detected:`, health.issues);
-          // Auto-repair if issues are simple
-          if (health.issues.length === 1 && health.issues[0].includes('permissions')) {
-            await this.repairBrowser();
-          }
-        }
-      } catch (error) {
-        console.error('Health monitoring check failed:', error);
-      }
-    }, 30 * 60 * 1000); // 30 minutes
+    // Health monitoring disabled to prevent auto-restart issues
+    console.log('⚠️ BrowserService health monitoring disabled to prevent Chrome auto-restart');
+    // this.healthCheckInterval = setInterval(async () => {
+    //   try {
+    //     const health = await this.performHealthCheck();
+    //     if (!health.isHealthy) {
+    //       console.warn(`Browser health issues detected:`, health.issues);
+    //       // Auto-repair if issues are simple
+    //       if (health.issues.length === 1 && health.issues[0].includes('permissions')) {
+    //         await this.repairBrowser();
+    //       }
+    //     }
+    //   } catch (error) {
+    //     console.error('Health monitoring check failed:', error);
+    //   }
+    // }, 30 * 60 * 1000); // 30 minutes
   }
 
   private stopHealthMonitoring(): void {
