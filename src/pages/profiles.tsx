@@ -359,18 +359,27 @@ const ProfilesPage = () => {
     setIsSaving(true);
     try {
       if (currentProfile) {
-        await window.api.invoke("profiles:update", { ...currentProfile, ...finalProfileData });
-        // Update local cache for instant UI feedback
-        updateLocalProfile({ ...currentProfile, ...finalProfileData });
-        toast.success("Profile đã được cập nhật thành công!");
+        const updateResult = await window.api.invoke("profiles:update", { ...currentProfile, ...finalProfileData });
+        if (updateResult === true) {
+          // Update local cache for instant UI feedback
+          updateLocalProfile({ ...currentProfile, ...finalProfileData });
+          toast.success("Profile đã được cập nhật thành công!");
+          closeDialog();
+        } else {
+          toast.error("Lỗi khi cập nhật profile trên server");
+        }
       } else {
         const profileId = await window.api.invoke("profiles:create", finalProfileData);
-        // Add to local cache for instant UI feedback
-        const newProfile = { ...finalProfileData, Id: profileId, CreatedAt: new Date().toISOString() };
-        addLocalProfile(newProfile);
-        toast.success("Profile đã được tạo thành công!");
+        if (profileId) {
+          // Add to local cache for instant UI feedback
+          const newProfile = { ...finalProfileData, Id: profileId, CreatedAt: new Date().toISOString() };
+          addLocalProfile(newProfile);
+          toast.success("Profile đã được tạo thành công!");
+          closeDialog();
+        } else {
+          toast.error("Lỗi khi tạo profile trên server");
+        }
       }
-      closeDialog();
     } catch (error: any) {
       toast.error(error.message || "Lỗi khi lưu profile");
     } finally {
@@ -560,13 +569,16 @@ const ProfilesPage = () => {
         JsonData: JSON.stringify(jsonData)
       };
       
-      await window.api.invoke("profiles:update", updatedProfile);
+      const updateResult = await window.api.invoke("profiles:update", updatedProfile);
       
-      // Update local cache for instant UI feedback
-      updateLocalProfile(updatedProfile);
-
-      toast.success("Ghi chú đã được cập nhật thành công!");
-      closeNotesDialog();
+      if (updateResult === true) {
+        // Update local cache for instant UI feedback
+        updateLocalProfile(updatedProfile);
+        toast.success("Ghi chú đã được cập nhật thành công!");
+        closeNotesDialog();
+      } else {
+        toast.error("Lỗi khi cập nhật ghi chú trên server");
+      }
     } catch (error: any) {
       toast.error(error.message || "Lỗi khi lưu ghi chú");
     }
@@ -821,25 +833,34 @@ const ProfilesPage = () => {
 
   const handleBulkGroupAssignment = async (profileIds: string[], groupId: string) => {
     const groupIdNumber = groupId === 'none' ? null : Number(groupId);
+    let successCount = 0;
     
     for (const profileId of profileIds) {
       try {
         const profile = profiles.find(p => p.Id === profileId);
         if (profile) {
-          await window.api.invoke("profiles:update", { ...profile, GroupId: groupIdNumber });
+          const updateResult = await window.api.invoke("profiles:update", { ...profile, GroupId: groupIdNumber });
+          if (updateResult === true) {
+            successCount++;
+          } else {
+            toast.error(`❌ Lỗi cập nhật nhóm cho profile ${profileId}: Server không xác nhận`);
+          }
         }
       } catch (error: any) {
         toast.error(`❌ Lỗi cập nhật nhóm cho profile ${profileId}: ${error.message}`);
       }
     }
     
-    const groupName = groups.find(g => g.Id === groupIdNumber)?.Name || 'Không có nhóm';
-    toast.success(`🎉 Đã gán ${profileIds.length} profiles vào nhóm ${groupName}`);
+    if (successCount > 0) {
+      const groupName = groups.find(g => g.Id === groupIdNumber)?.Name || 'Không có nhóm';
+      toast.success(`🎉 Đã gán ${successCount}/${profileIds.length} profiles vào nhóm ${groupName}`);
+    }
   };
 
   const handleBulkExtensionUpdate = async (profileIds: string[], extensionData: string) => {
     try {
       const extensions = JSON.parse(extensionData);
+      let successCount = 0;
       
       for (const profileId of profileIds) {
         try {
@@ -848,17 +869,25 @@ const ProfilesPage = () => {
             const jsonData = JSON.parse(profile.JsonData || '{}');
             jsonData.extensions = extensions;
             
-            await window.api.invoke("profiles:update", {
+            const updateResult = await window.api.invoke("profiles:update", {
               ...profile,
               JsonData: JSON.stringify(jsonData)
             });
+            
+            if (updateResult === true) {
+              successCount++;
+            } else {
+              toast.error(`❌ Lỗi cập nhật extension cho profile ${profileId}: Server không xác nhận`);
+            }
           }
         } catch (error: any) {
           toast.error(`❌ Lỗi cập nhật extension cho profile ${profileId}: ${error.message}`);
         }
       }
       
-      toast.success(`🎉 Đã cập nhật extensions cho ${profileIds.length} profiles`);
+      if (successCount > 0) {
+        toast.success(`🎉 Đã cập nhật extensions cho ${successCount}/${profileIds.length} profiles`);
+      }
     } catch (error) {
       toast.error("❌ Dữ liệu extension không hợp lệ (phải là JSON)");
     }
@@ -866,6 +895,7 @@ const ProfilesPage = () => {
 
   const handleBulkProxyAssignment = async (profileIds: string[], proxyId: string) => {
     const proxy = proxies.find(p => String(p.id) === proxyId);
+    let successCount = 0;
     
     for (const profileId of profileIds) {
       try {
@@ -887,18 +917,26 @@ const ProfilesPage = () => {
             };
           }
           
-          await window.api.invoke("profiles:update", {
+          const updateResult = await window.api.invoke("profiles:update", {
             ...profile,
             JsonData: JSON.stringify(jsonData)
           });
+          
+          if (updateResult === true) {
+            successCount++;
+          } else {
+            toast.error(`❌ Lỗi cập nhật proxy cho profile ${profileId}: Server không xác nhận`);
+          }
         }
       } catch (error: any) {
         toast.error(`❌ Lỗi cập nhật proxy cho profile ${profileId}: ${error.message}`);
       }
     }
     
-    const proxyName = proxy ? `${proxy.host}:${proxy.port}` : 'Local IP';
-    toast.success(`🎉 Đã gán proxy ${proxyName} cho ${profileIds.length} profiles`);
+    if (successCount > 0) {
+      const proxyName = proxy ? `${proxy.host}:${proxy.port}` : 'Local IP';
+      toast.success(`🎉 Đã gán proxy ${proxyName} cho ${successCount}/${profileIds.length} profiles`);
+    }
   };
 
   const handleBulkDelete = async (profileIds: string[]) => {
@@ -916,6 +954,7 @@ const ProfilesPage = () => {
   const handleBulkBookmarkUpdate = async (profileIds: string[], bookmarkData: string) => {
     try {
       const bookmarks = JSON.parse(bookmarkData);
+      let successCount = 0;
       
       for (const profileId of profileIds) {
         try {
@@ -924,17 +963,25 @@ const ProfilesPage = () => {
             const jsonData = JSON.parse(profile.JsonData || '{}');
             jsonData.bookmarks = bookmarks;
             
-            await window.api.invoke("profiles:update", {
+            const updateResult = await window.api.invoke("profiles:update", {
               ...profile,
               JsonData: JSON.stringify(jsonData)
             });
+            
+            if (updateResult === true) {
+              successCount++;
+            } else {
+              toast.error(`❌ Lỗi cập nhật bookmarks cho profile ${profileId}: Server không xác nhận`);
+            }
           }
         } catch (error: any) {
           toast.error(`❌ Lỗi cập nhật bookmarks cho profile ${profileId}: ${error.message}`);
         }
       }
       
-      toast.success(`🎉 Đã cập nhật bookmarks cho ${profileIds.length} profiles`);
+      if (successCount > 0) {
+        toast.success(`🎉 Đã cập nhật bookmarks cho ${successCount}/${profileIds.length} profiles`);
+      }
     } catch (error) {
       toast.error("❌ Dữ liệu bookmarks không hợp lệ (phải là JSON)");
     }

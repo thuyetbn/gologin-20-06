@@ -452,8 +452,8 @@ export class GoLogin {
 
   async createStartup(local = false, profileData = {}) {
     const profilePath = join(this.tmpdir, `gologin_profile_${this.profile_id}`);
-    await rimraf(profilePath, () => null);
-    debug('-', profilePath, 'dropped');
+    // await rimraf(profilePath, () => null);
+    // debug('-', profilePath, 'dropped');
     // const profile = await this.getProfile();
     const profile = profileData;
     if (!profile) {
@@ -1136,7 +1136,7 @@ export class GoLogin {
         '--password-store=basic',
         `--tz=${tz}`,
         `--lang=${this.browserLang}`,
-        `--window-size=${this.resolution.width},${this.resolution.height}`,
+        // `--window-size=${this.resolution.width},${this.resolution.height}`,
         '--window-position=0,0',
         `--user-data-dir=${profile_path}`,
       ];

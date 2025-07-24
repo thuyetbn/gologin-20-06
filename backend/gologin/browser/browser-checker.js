@@ -1,13 +1,12 @@
 import { exec as execNonPromise } from 'child_process';
 import decompress from 'decompress';
 import decompressUnzip from 'decompress-unzip';
-import { createWriteStream, promises as _promises } from 'fs';
+import { promises as _promises, createWriteStream } from 'fs';
 import { get } from 'https';
 import { homedir } from 'os';
 import { join } from 'path';
 import ProgressBar from 'progress';
 import util from 'util';
-import { createInterface } from 'readline';
 
 import { API_URL, getOS } from '../utils/common.js';
 

@@ -18,7 +18,8 @@ const fs = require('fs').promises;
 // GoLogin token array for rotation and retry
 const GOLOGIN_TOKENS = [
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODdkMzVhMzZhNjE3M2FmMzkzOTU2NWEiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODdkMzYyOThjZmVlMzc1NjU4OWUxZTkifQ.8ZVr4Hhe43nudQj2FP6o6EAH2ZmVqqALflYsBCiMenk",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjE0YWM3MzdhMTIwZjRlZDk2OTM2YTYiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODNkYmQzMDllZjNmNzMyNjk1ODA3ZTYifQ.gUN3PNj6BkIwUm9urC3a2IuVniwvltW_OUvJkxXaDeo"
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjE0YWM3MzdhMTIwZjRlZDk2OTM2YTYiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODNkYmQzMDllZjNmNzMyNjk1ODA3ZTYifQ.gUN3PNj6BkIwUm9urC3a2IuVniwvltW_OUvJkxXaDeo",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODdkMzlkNGFiZTlkMGQwMDhjNDllMzEiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODdkM2E1YTc4MjU0YWM1ZjkzYjE1ZGMifQ.nAYlAOoV8MxGCaLAWK_GkZdOu5AWFaady1h8ceCfj_A"
 ];
 
 // Token rotation state
@@ -447,17 +448,22 @@ ipcMain.handle("groups:create", async (_event, groupData) => {
     throw new Error("Group name must be 30 characters or less.");
   }
   
-  const group = await Group.create(groupData);
-  const result = group.toJSON();
-  
-  // Update cache immediately
-  if ((global as any).cachedData) {
-    (global as any).cachedData.groups.push(result);
-    (global as any).cachedData.lastUpdated = Date.now();
-    console.log('🔄 [Cache] Added new group to cache');
+  try {
+    const group = await Group.create(groupData);
+    const result = group.toJSON();
+    
+    // Update cache immediately
+    if ((global as any).cachedData) {
+      (global as any).cachedData.groups.push(result);
+      (global as any).cachedData.lastUpdated = Date.now();
+      console.log('🔄 [Cache] Added new group to cache');
+    }
+    
+    return result.Id; // Return the ID of the created group
+  } catch (error: any) {
+    console.error('Error creating group:', error);
+    throw error; // Re-throw error for proper error handling
   }
-  
-  return result;
 });
 
 ipcMain.handle("groups:update", async (_event, groupData) => {
@@ -469,33 +475,56 @@ ipcMain.handle("groups:update", async (_event, groupData) => {
     throw new Error("Group name must be 30 characters or less.");
   }
   
-  const result = await Group.update(data, { where: { Id } });
-  
-  // Update cache immediately
-  if ((global as any).cachedData) {
-    const groupIndex = (global as any).cachedData.groups.findIndex((g: any) => g.Id === Id);
-    if (groupIndex !== -1) {
-      (global as any).cachedData.groups[groupIndex] = { ...groupData };
-      (global as any).cachedData.lastUpdated = Date.now();
-      console.log('🔄 [Cache] Updated group in cache');
+  try {
+    const result = await Group.update(data, { where: { Id } });
+    
+    // Check if update was successful (at least 1 row affected)
+    if (result[0] > 0) {
+      // Update cache immediately if successful
+      if ((global as any).cachedData) {
+        const groupIndex = (global as any).cachedData.groups.findIndex((g: any) => g.Id === Id);
+        if (groupIndex !== -1) {
+          (global as any).cachedData.groups[groupIndex] = { ...groupData };
+          (global as any).cachedData.lastUpdated = Date.now();
+          console.log('🔄 [Cache] Updated group in cache');
+        }
+      }
+      
+      return true; // Return true when successful
+    } else {
+      console.warn(`Group update failed: No rows affected for group ${Id}`);
+      return false; // Return false when no rows were updated
     }
+  } catch (error: any) {
+    console.error(`Error updating group ${Id}:`, error);
+    throw error; // Re-throw error for proper error handling
   }
-  
-  return result;
 });
 
 ipcMain.handle("groups:delete", async (_event, groupId) => {
   const { Group } = await getDatabase();
-  const result = await Group.destroy({ where: { Id: groupId } });
   
-  // Update cache immediately
-  if ((global as any).cachedData) {
-    (global as any).cachedData.groups = (global as any).cachedData.groups.filter((g: any) => g.Id !== groupId);
-    (global as any).cachedData.lastUpdated = Date.now();
-    console.log('🔄 [Cache] Removed group from cache');
+  try {
+    const result = await Group.destroy({ where: { Id: groupId } });
+    
+    // Check if deletion was successful (at least 1 row affected)
+    if (result > 0) {
+      // Update cache immediately if successful
+      if ((global as any).cachedData) {
+        (global as any).cachedData.groups = (global as any).cachedData.groups.filter((g: any) => g.Id !== groupId);
+        (global as any).cachedData.lastUpdated = Date.now();
+        console.log('🔄 [Cache] Removed group from cache');
+      }
+      
+      return true; // Return true when successful
+    } else {
+      console.warn(`Group deletion failed: No rows affected for group ${groupId}`);
+      return false; // Return false when no rows were deleted
+    }
+  } catch (error: any) {
+    console.error(`Error deleting group ${groupId}:`, error);
+    throw error; // Re-throw error for proper error handling
   }
-  
-  return result;
 });
 
 // Profiles - Optimized with caching
@@ -595,14 +624,8 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
       `Failed to get profile data for ${profileId}`
     );
      const existingJsonData = profileData.JsonData ? JSON.parse(profileData.JsonData) : {};
-     const JsonData1 = {
-       "storageInfo": {
-          "isNewProfile": false,
-          "useStorageGateway": false,
-          "storageLink": ""
-        }
-      };
-    const JsonData = { ...newJsonData, ...existingJsonData, ...JsonData1 };
+    
+    const JsonData = { ...newJsonData, ...existingJsonData };
     profileData.JsonData = JSON.stringify(JsonData);
     
     // Create GoLogin instance with current token for operations
@@ -621,6 +644,7 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     // Download and extract profile with retry
     await retryWithBackoff(
       async () => {
+        
         await goLogin.downloadProfileAndExtract(profileData, true);
         console.log(`Profile downloaded and extracted to: ${goLogin.profilePath()}`);
       },
@@ -631,7 +655,8 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     
     // Create startup script
     try {
-      await goLogin.createStartup(false, JsonData);
+      await goLogin.setProfileId(profileId);
+      await goLogin.createStartup(true, JsonData);
     } catch (error: any) {
       console.warn(`Warning: Failed to create startup script for ${profileId}:`, error.message);
       // Don't fail for this, profile can still work
@@ -653,7 +678,16 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     profileData.Id = profileId;
     
     try {
-      await Profile.create(profileData);
+      const createdProfile = await Profile.create(profileData);
+      
+      // Update cache immediately after successful creation
+      if ((global as any).cachedData) {
+        const newProfileData = createdProfile.toJSON();
+        (global as any).cachedData.profiles.unshift(newProfileData); // Add to beginning (latest first)
+        (global as any).cachedData.lastUpdated = Date.now();
+        console.log('🔄 [Cache] Added new profile to cache');
+      }
+      
       console.log(`Profile ${profileId} saved to database successfully`);
       return profileId;
     } catch (error: any) {
@@ -946,11 +980,49 @@ ipcMain.handle("profiles:launch", async (_event, profileId) => {
       `Failed to create startup for profile ${profileId}`
     );
     
-    // Spawn browser with retry (reduced retry count to prevent multiple launches)
+    // Spawn browser with enhanced retry logic
     const wsUrl = await retryWithBackoff(
-      async () => await goLogin.spawnBrowser(),
-      1, // maxRetries reduced to 1 to prevent multiple launches
-      2000, // baseDelay (longer for browser spawn)
+      async () => {
+        try {
+          const url = await goLogin.spawnBrowser();
+          
+          // Additional check: verify the connection is actually working
+          if (url && goLogin.port) {
+            // Wait a bit for browser to fully initialize
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Test connection to ensure browser is responsive
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 5000);
+              
+              const testResponse = await fetch(`http://127.0.0.1:${goLogin.port}/json/version`, {
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+              
+              if (!testResponse.ok) {
+                throw new Error(`Browser not responsive on port ${goLogin.port}`);
+              }
+            } catch (connError: any) {
+              console.warn(`Browser connection test failed: ${connError.message}`);
+              // Don't fail here, let the main connection attempt proceed
+            }
+          }
+          
+          return url;
+        } catch (error: any) {
+          // Enhanced error logging
+          console.error(`Browser spawn attempt failed:`, {
+            error: error.message,
+            port: goLogin.port,
+            profileId
+          });
+          throw error;
+        }
+      },
+      3, // Increased retry count for browser spawn stability
+      3000, // Longer base delay for browser startup
       `Failed to spawn browser for profile ${profileId}`
     );
     
@@ -1115,9 +1187,43 @@ ipcMain.handle("profiles:restartBrowser", async (_event, profileId) => {
       1, 1000, `Failed to create startup for profile ${profileId}` // Reduced retry count
     );
     
+    // Spawn browser with same enhanced logic as launch
     const wsUrl = await retryWithBackoff(
-      async () => await goLogin.spawnBrowser(),
-      1, 2000, `Failed to spawn browser for profile ${profileId}` // Reduced retry count
+      async () => {
+        try {
+          const url = await goLogin.spawnBrowser();
+          
+          if (url && goLogin.port) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 5000);
+              
+              const testResponse = await fetch(`http://127.0.0.1:${goLogin.port}/json/version`, {
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+              
+              if (!testResponse.ok) {
+                throw new Error(`Browser not responsive on port ${goLogin.port}`);
+              }
+            } catch (connError: any) {
+              console.warn(`Browser connection test failed during restart: ${connError.message}`);
+            }
+          }
+          
+          return url;
+        } catch (error: any) {
+          console.error(`Browser restart spawn failed:`, {
+            error: error.message,
+            port: goLogin.port,
+            profileId
+          });
+          throw error;
+        }
+      },
+      3, 3000, `Failed to spawn browser for profile ${profileId}` // Enhanced retry for restart
     );
     
     goLogin.setActive(true);
@@ -1176,7 +1282,31 @@ ipcMain.handle("profiles:getRunning", async () => {
 ipcMain.handle("profiles:update", async (_event, profileData) => {
   const { Profile } = await getDatabase();
   const { Id, ...data } = profileData;
-  return Profile.update(data, { where: { Id } });
+  
+  try {
+    const result = await Profile.update(data, { where: { Id } });
+    
+    // Check if update was successful (at least 1 row affected)
+    if (result[0] > 0) {
+      // Update cache immediately if successful
+      if ((global as any).cachedData) {
+        const profileIndex = (global as any).cachedData.profiles.findIndex((p: any) => p.Id === Id);
+        if (profileIndex !== -1) {
+          (global as any).cachedData.profiles[profileIndex] = { ...profileData };
+          (global as any).cachedData.lastUpdated = Date.now();
+          console.log('🔄 [Cache] Updated profile in cache');
+        }
+      }
+      
+      return true; // Return true when successful
+    } else {
+      console.warn(`Profile update failed: No rows affected for profile ${Id}`);
+      return false; // Return false when no rows were updated
+    }
+  } catch (error: any) {
+    console.error(`Error updating profile ${Id}:`, error);
+    throw error; // Re-throw error for proper error handling
+  }
 });
 
 ipcMain.handle("profiles:delete", async (_event, profileId) => {
@@ -1213,8 +1343,15 @@ ipcMain.handle("profiles:delete", async (_event, profileId) => {
       throw new Error(`Failed to delete profile ${profileId} from database`);
     }
 
+    // Update cache immediately after successful deletion
+    if ((global as any).cachedData) {
+      (global as any).cachedData.profiles = (global as any).cachedData.profiles.filter((p: any) => p.Id !== profileId);
+      (global as any).cachedData.lastUpdated = Date.now();
+      console.log('🔄 [Cache] Removed profile from cache');
+    }
+
     console.log(`Successfully deleted profile ${profileId} from database`);
-    return { success: true, message: 'Profile and directory deleted successfully' };
+    return true;
 
   } catch (error: any) {
     console.error(`Error deleting profile ${profileId}:`, error);
@@ -1408,12 +1545,17 @@ ipcMain.handle("profiles:importCookie", async (_event, { profileId, rawCookies }
     profileJson.cookies = { cookies: rawCookies };
     const newJsonData = JSON.stringify(profileJson);
 
-    await Profile.update({
+    const updateResult = await Profile.update({
       JsonData: newJsonData,
       UpdatedAt: new Date().toISOString()
     }, { where: { Id: profileId } });
 
-    return firstResult;
+    // Return true only if both cookie import and profile update were successful
+    if (updateResult[0] > 0) {
+      return true;
+    } else {
+      throw new Error('Failed to update profile JsonData after cookie import');
+    }
 
   } catch (error: any) {
     console.error("Error in profiles:importCookie:", error);
@@ -1585,6 +1727,22 @@ export async function retryWithBackoff<T>(
           error.message?.includes('invalid token') ||
           error.message?.includes('Profile name is required')) {
         throw error; // Don't retry auth errors
+      }
+      
+      // Special handling for browser connection errors
+      if (error.message?.includes('ECONNREFUSED') || 
+          error.message?.includes('EADDRINUSE') ||
+          error.message?.includes('port')) {
+        console.log(`🔌 Browser connection issue detected: ${error.message}`);
+        
+        // For connection errors, add extra delay to let browser stabilize
+        if (attempt < maxRetries) {
+          const extraDelay = 2000; // Extra 2 seconds for browser issues
+          const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000 + extraDelay;
+          console.log(`${errorMessage} (attempt ${attempt}/${maxRetries}). Browser needs more time, retrying in ${Math.round(delay)}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
       }
       
       if (attempt === maxRetries) {
