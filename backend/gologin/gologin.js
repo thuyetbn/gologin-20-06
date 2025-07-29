@@ -679,9 +679,9 @@ export class GoLogin {
     if (!this.executablePath) {
       const { userAgent } = profile.navigator;
       try {
-        const [browserMajorVersion] = userAgent.split('Chrome/')[1].split('.');
-        this.browserMajorVersion = Number(browserMajorVersion);
-        await this.checkBrowser(browserMajorVersion);
+        const latestVersionNumber = await this.getLatestBrowserVersion();
+        this.browserMajorVersion = latestVersionNumber;
+        await this.checkBrowser(latestVersionNumber);
       } catch (e) {
         const latestVersionNumber = await this.getLatestBrowserVersion();
         this.browserMajorVersion = latestVersionNumber;
@@ -1109,6 +1109,7 @@ export class GoLogin {
     this.port = remote_debugging_port;
 
     const ORBITA_BROWSER = this.executablePath || this.browserChecker.getOrbitaPath;
+    console.log('ORBITA_BROWSER', ORBITA_BROWSER);
     debug(`ORBITA_BROWSER=${ORBITA_BROWSER}`);
     const env = {};
     Object.keys(process.env).forEach((key) => {

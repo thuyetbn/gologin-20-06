@@ -982,50 +982,11 @@ ipcMain.handle("profiles:launch", async (_event, profileId) => {
     
     // Spawn browser with enhanced retry logic
     const wsUrl = await retryWithBackoff(
-      async () => {
-        try {
-          const url = await goLogin.spawnBrowser();
-          
-          // Additional check: verify the connection is actually working
-          if (url && goLogin.port) {
-            // Wait a bit for browser to fully initialize
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Test connection to ensure browser is responsive
-            try {
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 5000);
-              
-              const testResponse = await fetch(`http://127.0.0.1:${goLogin.port}/json/version`, {
-                signal: controller.signal
-              });
-              clearTimeout(timeoutId);
-              
-              if (!testResponse.ok) {
-                throw new Error(`Browser not responsive on port ${goLogin.port}`);
-              }
-            } catch (connError: any) {
-              console.warn(`Browser connection test failed: ${connError.message}`);
-              // Don't fail here, let the main connection attempt proceed
-            }
-          }
-          
-          return url;
-        } catch (error: any) {
-          // Enhanced error logging
-          console.error(`Browser spawn attempt failed:`, {
-            error: error.message,
-            port: goLogin.port,
-            profileId
-          });
-          throw error;
-        }
-      },
-      3, // Increased retry count for browser spawn stability
-      3000, // Longer base delay for browser startup
+      async () => await goLogin.spawnBrowser(),
+      2, // maxRetries
+      2000, // baseDelay (longer for browser spawn)
       `Failed to spawn browser for profile ${profileId}`
     );
-    
     console.log('wsUrl:', wsUrl);
     goLogin.setActive(true);
     (profile as any).LastRunAt = new Date();
