@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Group {
+  id         Int       @id @default(autoincrement())
+  name       String
+  sort       Int       @default(0)
+  profiles   Profile[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Profile {
+  id          String    @id
+  name        String
+  group       Group?    @relation(fields: [groupId], references: [id])
+  groupId     Int?
+  jsonData    Json
+  fingerprint Json?
+  preferences Json?
+  bookmarks   Json?
+  extensions  Json?
+  createdBy   String?
+  lastRunBy   String?
+  lastRunAt   DateTime?
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  cookies     ProfileCookies?
+  lock        ProfileLock?
+}
+
+model ProfileCookies {
+  profileId     String  @id
+  profile       Profile @relation(fields: [profileId], references: [id])
+  dataEncrypted Bytes
+  algo          String  @default("aes-256-gcm")
+  keyId         String  @default("v1")
+  updatedAt     DateTime @updatedAt
+}
+
+model ProfileLock {
+  profileId     String  @id
+  profile       Profile @relation(fields: [profileId], references: [id])
+  lockedBy      String
+  lockExpiresAt DateTime
+}
+
