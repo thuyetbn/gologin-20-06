@@ -30,6 +30,13 @@ import { archiveProfile } from './profile/profile-archiver.js';
 import { checkAutoLang, getIntlProfileConfig } from './utils/browser.js';
 import { API_URL, ensureDirectoryExists, FALLBACK_API_URL, getOsAdvanced } from './utils/common.js';
 import { STORAGE_GATEWAY_BASE_URL } from './utils/constants.js';
+import {
+  backupLocalCookies,
+  downloadCookiesForProfile,
+  getLocalCookiesInfo,
+  syncCookiesForProfile,
+  uploadCookiesForProfile
+} from './utils/cookie-sync-utils.js';
 import { checkSocksProxy, makeRequest } from './utils/http.js';
 import { get, isPortReachable } from './utils/utils.js';
 import { zeroProfileBookmarks } from './utils/zero-profile-bookmarks.js';
@@ -1754,6 +1761,54 @@ export class GoLogin {
     }, { token: this.access_token, fallbackUrl: `${FALLBACK_API_URL}/browser/fingerprint?os=${os}` });
 
     return fpResponse || {};
+  }
+
+  // ==================== COOKIE SYNC METHODS ====================
+
+  /**
+   * Upload cookies from local profile to server
+   * @param {Object} options - Upload options
+   * @returns {Promise<Object>} Upload result
+   */
+  async uploadCookies(options = {}) {
+    console.log(`🔄 [GoLogin] Uploading cookies for profile: ${this.profile_id}`);
+    return uploadCookiesForProfile(this.profile_id, this.access_token, this.profilePath());
+  }
+
+  /**
+   * Download cookies from server to local profile
+   * @param {Object} options - Download options
+   * @returns {Promise<Object>} Download result
+   */
+  async downloadCookies(options = {}) {
+    console.log(`🔄 [GoLogin] Downloading cookies for profile: ${this.profile_id}`);
+    return downloadCookiesForProfile(this.profile_id, this.access_token, this.profilePath());
+  }
+
+  /**
+   * Synchronize cookies between local and server
+   * @param {Object} options - Sync options
+   * @returns {Promise<Object>} Sync result
+   */
+  async syncCookies(options = {}) {
+    console.log(`🔄 [GoLogin] Syncing cookies for profile: ${this.profile_id}`);
+    return syncCookiesForProfile(this, options);
+  }
+
+  /**
+   * Get local cookies information
+   * @returns {Promise<Object>} Local cookies info
+   */
+  async getCookiesInfo() {
+    return getLocalCookiesInfo(this.profile_id, this.profilePath());
+  }
+
+  /**
+   * Backup local cookies
+   * @returns {Promise<string|null>} Backup file path or null
+   */
+  async backupCookies() {
+    return backupLocalCookies(this.profile_id, this.profilePath());
   }
 }
 

@@ -21,6 +21,14 @@
     "postinstall": "electron-builder install-app-deps",
     "dist": "yarn build && electron-builder",
     "dist:safe": "yarn build:safe && electron-builder",
+    "dist:mac": "yarn build && electron-builder --mac",
+    "dist:mac:universal": "yarn build && electron-builder --mac --universal",
+    "dist:mac:x64": "yarn build && electron-builder --mac --x64",
+    "dist:mac:arm64": "yarn build && electron-builder --mac --arm64",
+    "dist:win": "yarn build && electron-builder --win",
+    "dist:linux": "yarn build && electron-builder --linux",
+    "clean": "rimraf out && rimraf dist && rimraf node_modules/.cache",
+    "electron-rebuild": "electron-rebuild",
     "update:readme": "tsx scripts/update-readme.js"
   },
   "dependencies": {
@@ -69,7 +77,10 @@
     "tailwindcss-animate": "^1.0.7",
     "use-debounce": "^10.0.5",
     "uuid": "^11.1.0",
-    "yup": "^1.6.1"
+    "yup": "^1.6.1",
+    "portfinder": "^1.0.32",
+    "is-port-reachable": "^5.0.0",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
@@ -80,6 +91,7 @@
     "autoprefixer": "^10.4.21",
     "electron": "^36.3.2",
     "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
     "fs-extra": "^11.3.0",
     "next": "15.3.3",
     "postcss": "^8.5.6",
@@ -91,9 +103,13 @@
   },
   "build": {
     "appId": "com.thuyetbn.gologinmanager",
-    "productName": "GoLogin Manager - ThuyetBN",
+    "productName": "GoLogin Manager",
     "files": [
-      "dist"
+      "dist/**/*",
+      "out/**/*",
+      "!dist/**/*.ts",
+      "!dist/tsconfig.json",
+      "!out/**/*.map"
     ],
     "directories": {
       "output": "out"
@@ -102,19 +118,37 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "${name}-${version}-windows-${arch}.${ext}"
+      "artifactName": "${name}-${version}-windows-${arch}.${ext}",
+      "icon": "assets/icon.ico"
     },
     "mac": {
-      "target": "dmg",
-      "signIgnore": null,
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "artifactName": "${productName}-${version}-macOS-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "notarize": false,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "artifactName": "${name}-${version}-linux-${arch}.${ext}"
-    }
+      "artifactName": "${name}-${version}-linux-${arch}.${ext}",
+      "icon": "assets/icon.png"
+    },
+    "publish": null
   }
 }
