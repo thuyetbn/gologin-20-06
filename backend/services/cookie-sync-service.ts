@@ -3,9 +3,8 @@ import { join } from 'path';
 import { ipcMain } from 'electron';
 
 import { downloadCookies, uploadCookies } from '../gologin/browser/browser-user-data-manager.js';
-import { loadCookiesFromFile, getDB, getUniqueCookies } from '../gologin/cookies/cookies-manager.js';
-import { API_URL, FALLBACK_API_URL } from '../gologin/utils/common.js';
-import { makeRequest } from '../gologin/utils/http.js';
+import { loadCookiesFromFile, getDB } from '../gologin/cookies/cookies-manager.js';
+import { API_URL } from '../gologin/utils/common.js';
 
 interface CookieData {
   name: string;
@@ -45,7 +44,7 @@ export class CookieSyncService {
 
   private setupIpcHandlers() {
     // Upload cookies to server
-    ipcMain.handle('cookies:upload', async (event, options: CookieSyncOptions) => {
+    ipcMain.handle('cookies:upload', async (_event, options: CookieSyncOptions) => {
       try {
         const result = await this.uploadCookiesToServer(options);
         return { success: true, data: result };
@@ -59,7 +58,7 @@ export class CookieSyncService {
     });
 
     // Download cookies from server
-    ipcMain.handle('cookies:download', async (event, options: CookieSyncOptions) => {
+    ipcMain.handle('cookies:download', async (_event, options: CookieSyncOptions) => {
       try {
         const result = await this.downloadCookiesFromServer(options);
         return { success: true, data: result };
@@ -73,7 +72,7 @@ export class CookieSyncService {
     });
 
     // Sync cookies (download then upload)
-    ipcMain.handle('cookies:sync', async (event, options: CookieSyncOptions) => {
+    ipcMain.handle('cookies:sync', async (_event, options: CookieSyncOptions) => {
       try {
         const downloadResult = await this.downloadCookiesFromServer(options);
         const uploadResult = await this.uploadCookiesToServer(options);
@@ -95,7 +94,7 @@ export class CookieSyncService {
     });
 
     // Get local cookies info
-    ipcMain.handle('cookies:get-local-info', async (event, options: CookieSyncOptions) => {
+    ipcMain.handle('cookies:get-local-info', async (_event, options: CookieSyncOptions) => {
       try {
         const info = await this.getLocalCookiesInfo(options);
         return { success: true, data: info };
@@ -135,8 +134,8 @@ export class CookieSyncService {
       const serverFormatCookies = this.convertCookiesToServerFormat(localCookies);
 
       // 3. Upload to server using existing function
-      const uploadResponse = await uploadCookies({
-        cookies: serverFormatCookies,
+      await uploadCookies({
+        cookies: serverFormatCookies as any,
         profileId,
         ACCESS_TOKEN: accessToken,
         API_BASE_URL: apiBaseUrl

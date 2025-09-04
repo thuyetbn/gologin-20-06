@@ -25,6 +25,7 @@ type Channels =
   | "profiles:exportCookie"
   | "profiles:importCookie"
   | "profiles:restartBrowser"
+  | "profiles:getAll"
   // Browser Service channels
   | "browser:get-info"
   | "browser:update-with-progress"
@@ -47,6 +48,11 @@ type Channels =
   | "credentials:status"
   | "credentials:clear"
   | "credentials:test"
+  // Cookie Sync channels
+  | "cookies:get-local-info"
+  | "cookies:upload"
+  | "cookies:download"
+  | "cookies:sync"
   // Keep old ones for now, will be removed later
   | "get-users"
   | "delete-user"

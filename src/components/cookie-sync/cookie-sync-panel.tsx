@@ -83,7 +83,11 @@ export const CookieSyncPanel: React.FC<CookieSyncPanelProps> = ({
         profilePath
       });
 
-      setLastResult(result.data || { success: false, error: result.error });
+      setLastResult(result.data || { 
+        success: false, 
+        message: result.error || 'Unknown error',
+        error: result.error 
+      });
       
       if (result.success) {
         await loadLocalCookieInfo(); // Refresh local info
@@ -91,6 +95,7 @@ export const CookieSyncPanel: React.FC<CookieSyncPanelProps> = ({
     } catch (error) {
       setLastResult({
         success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     } finally {
@@ -119,6 +124,7 @@ export const CookieSyncPanel: React.FC<CookieSyncPanelProps> = ({
     } catch (error) {
       setLastResult({
         success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     } finally {
@@ -145,7 +151,11 @@ export const CookieSyncPanel: React.FC<CookieSyncPanelProps> = ({
           message: `Sync completed: Downloaded ${result.data.download.cookieCount || 0} cookies, Uploaded ${result.data.upload.cookieCount || 0} cookies`
         });
       } else {
-        setLastResult({ success: false, error: result.error });
+        setLastResult({ 
+          success: false, 
+          message: result.error || 'Unknown error',
+          error: result.error 
+        });
       }
       
       if (result.success) {
@@ -154,6 +164,7 @@ export const CookieSyncPanel: React.FC<CookieSyncPanelProps> = ({
     } catch (error) {
       setLastResult({
         success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     } finally {
