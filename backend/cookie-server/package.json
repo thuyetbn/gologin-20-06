@@ -1,0 +1,103 @@
+{
+  "name": "custom-cookie-server",
+  "version": "1.0.0",
+  "description": "Custom cookie storage and synchronization server for GoLogin",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "setup": "node scripts/setup.js",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "build": "echo 'No build step required for Node.js server'",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js",
+    "db:backup": "node scripts/backup.js",
+    "db:restore": "node scripts/restore.js",
+    "init-db": "node scripts/init-mysql.js init",
+    "test-db": "node scripts/init-mysql.js test",
+    "reset-db": "node scripts/init-mysql.js reset",
+    "setup-mysql": "echo 'Setting up MySQL...' && npm run init-db",
+    "logs": "tail -f logs/server.log",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop custom-cookie-server",
+    "pm2:restart": "pm2 restart custom-cookie-server",
+    "pm2:logs": "pm2 logs custom-cookie-server",
+    "docker:build": "docker build -t custom-cookie-server .",
+    "docker:run": "docker run -p 3001:3001 custom-cookie-server",
+    "health": "curl -f http://localhost:3001/health || exit 1"
+  },
+  "keywords": [
+    "cookie",
+    "storage",
+    "synchronization",
+    "gologin",
+    "browser",
+    "automation",
+    "privacy"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "compression": "^1.7.4",
+    "mysql2": "^3.6.5",
+    "sqlite3": "^5.1.6",
+    "sqlite": "^5.1.1",
+    "requestretry": "^7.1.0",
+    "uuid": "^9.0.1",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "joi": "^17.11.0",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1",
+    "node-cron": "^3.0.3",
+    "archiver": "^6.0.1",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "vitest": "^1.0.4",
+    "supertest": "^6.3.3",
+    "eslint": "^8.55.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-node": "^11.1.0",
+    "prettier": "^3.1.1",
+    "@types/node": "^20.10.5",
+    "pm2": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/custom-cookie-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/custom-cookie-server/issues"
+  },
+  "homepage": "https://github.com/yourusername/custom-cookie-server#readme",
+  "config": {
+    "port": 3001,
+    "host": "localhost"
+  },
+  "pm2": {
+    "name": "custom-cookie-server",
+    "script": "server.js",
+    "instances": 1,
+    "exec_mode": "cluster",
+    "env": {
+      "NODE_ENV": "production",
+      "PORT": 3001
+    }
+  }
+}

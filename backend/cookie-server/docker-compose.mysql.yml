@@ -1,0 +1,224 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: cookie-server-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_123}
+      MYSQL_DATABASE: ${DB_NAME:-cookie_server}
+      MYSQL_USER: ${DB_USER:-cookie_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-cookie_password_123}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/conf.d:/etc/mysql/conf.d:ro
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+      - ./logs/mysql:/var/log/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=512M
+      --max-connections=200
+      --query-cache-size=64M
+      --slow-query-log=1
+      --slow-query-log-file=/var/log/mysql/slow.log
+      --long-query-time=2
+      --log-error=/var/log/mysql/error.log
+      --general-log=1
+      --general-log-file=/var/log/mysql/general.log
+    networks:
+      - cookie-server-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root_password_123}"]
+      timeout: 20s
+      retries: 10
+      interval: 30s
+      start_period: 40s
+
+  # Cookie Server Application
+  cookie-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cookie-server-app
+    restart: unless-stopped
+    environment:
+      # Database Configuration
+      DB_TYPE: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-cookie_user}
+      DB_PASSWORD: ${DB_PASSWORD:-cookie_password_123}
+      DB_NAME: ${DB_NAME:-cookie_server}
+      DB_CONNECTION_LIMIT: 20
+      DB_ACQUIRE_TIMEOUT: 60000
+      DB_TIMEOUT: 60000
+      
+      # Server Configuration
+      COOKIE_SERVER_PORT: 3001
+      COOKIE_SERVER_HOST: 0.0.0.0
+      NODE_ENV: ${NODE_ENV:-production}
+      
+      # Security
+      JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_key_here}
+      API_KEY_SECRET: ${API_KEY_SECRET:-your_api_key_secret_here}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-your_32_character_encryption_key}
+      
+      # CORS
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FILE_PATH: /app/logs/cookie-server.log
+      
+      # Features
+      FEATURE_BROWSER_HISTORY: true
+      FEATURE_SAVED_PASSWORDS: true
+      FEATURE_BOOKMARKS: true
+      FEATURE_FULL_BACKUP: true
+    ports:
+      - "${COOKIE_SERVER_PORT:-3001}:3001"
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ./data:/app/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - cookie-server-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
+
+  # phpMyAdmin (optional - for database management)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: cookie-server-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: ${DB_USER:-cookie_user}
+      PMA_PASSWORD: ${DB_PASSWORD:-cookie_password_123}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_123}
+      PMA_ARBITRARY: 1
+      PMA_ABSOLUTE_URI: http://localhost:8080/
+    ports:
+      - "8080:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - cookie-server-network
+    profiles:
+      - admin
+
+  # Redis (optional - for caching)
+  redis:
+    image: redis:7-alpine
+    container_name: cookie-server-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_123}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cookie-server-network
+    profiles:
+      - cache
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      timeout: 3s
+      retries: 5
+      interval: 30s
+
+  # Nginx (optional - reverse proxy)
+  nginx:
+    image: nginx:alpine
+    container_name: cookie-server-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - cookie-server
+    networks:
+      - cookie-server-network
+    profiles:
+      - proxy
+
+  # Prometheus (optional - monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cookie-server-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - cookie-server-network
+    profiles:
+      - monitoring
+
+  # Grafana (optional - monitoring dashboard)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cookie-server-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - cookie-server-network
+    profiles:
+      - monitoring
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  cookie-server-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
