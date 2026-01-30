@@ -13,10 +13,16 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
 import {
+    Check,
     Database,
+    Edit2,
     FolderOpen,
     HardDrive,
+    Key,
+    Plus,
     Save,
+    Trash2,
+    X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -28,6 +34,11 @@ export interface Settings {
   backupInterval: number;
 }
 
+interface GoLoginToken {
+  name: string;
+  token: string;
+}
+
 const SettingsPage = () => {
   // State for settings
   const [settings, setSettings] = useState<Settings>({
@@ -36,14 +47,23 @@ const SettingsPage = () => {
     backupInterval: 24,
   });
 
+  // Token management state
+  const [tokens, setTokens] = useState<GoLoginToken[]>([]);
+  const [newTokenName, setNewTokenName] = useState("");
+  const [newTokenValue, setNewTokenValue] = useState("");
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editToken, setEditToken] = useState("");
+
   // Form state
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load settings on component mount
+  // Load settings and tokens on component mount
   useEffect(() => {
-    const fetchSettings = async () => {
+    const fetchData = async () => {
       try {
+        // Fetch settings
         const fetchedSettings = await window.api.invoke("settings:get") as any;
         if (fetchedSettings) {
           setSettings({
@@ -52,13 +72,17 @@ const SettingsPage = () => {
             backupInterval: fetchedSettings.backupInterval || 24,
           });
         }
+
+        // Fetch tokens
+        const fetchedTokens = await window.api.invoke("tokens:get") as GoLoginToken[];
+        setTokens(fetchedTokens || []);
       } catch (error) {
-        console.error("Failed to fetch settings:", error);
+        console.error("Failed to fetch data:", error);
         toast.error("Failed to load settings");
       }
     };
 
-    fetchSettings();
+    fetchData();
   }, []);
 
   const handleSave = async () => {
@@ -84,13 +108,10 @@ const SettingsPage = () => {
       const result = await window.api.invoke("dialog:selectFolder") as any;
       if (result && !result.canceled && result.filePaths?.length > 0) {
         let selectedPath = result.filePaths[0];
-        console.log(`Selected normalized path: ${selectedPath}`);
         
-        // Setup database in the selected directory
         try {
           const dbSetupResult = await window.api.invoke("data:setupDatabase", selectedPath) as any;
           if (dbSetupResult.success) {
-            // Use normalized path from backend if available, otherwise use selected path
             const finalPath = dbSetupResult.normalizedPath || selectedPath;
             const newSettings = { ...settings, dataPath: finalPath };
             setSettings(newSettings);
@@ -102,15 +123,12 @@ const SettingsPage = () => {
               toast.success("Thư mục đã được chọn và database đã được sao chép thành công!");
             }
             
-            // Log the path normalization if it occurred
-            if (finalPath !== selectedPath) {
-              console.log(`Path normalized from "${selectedPath}" to "${finalPath}"`);
-            }
-            
-            // Auto-save settings and refresh to clear setup state
+            // Auto-save and reload tokens
             setTimeout(async () => {
               try {
                 await window.api.invoke("settings:set", newSettings);
+                const reloadedTokens = await window.api.invoke("tokens:reload") as GoLoginToken[];
+                setTokens(reloadedTokens || []);
                 window.location.reload();
               } catch (error) {
                 console.error("Auto-save failed:", error);
@@ -121,7 +139,6 @@ const SettingsPage = () => {
           }
         } catch (dbError: any) {
           toast.error(`Lỗi khi thiết lập database: ${dbError.message}`);
-          // Still set the path even if database setup failed
           const newSettings = { ...settings, dataPath: selectedPath };
           setSettings(newSettings);
           setIsDirty(true);
@@ -137,16 +154,86 @@ const SettingsPage = () => {
     setIsDirty(true);
   };
 
+  // Token management functions
+  const handleAddToken = async () => {
+    if (!newTokenName.trim() || !newTokenValue.trim()) {
+      toast.error("Please enter both name and token");
+      return;
+    }
+
+    try {
+      const updatedTokens = await window.api.invoke("tokens:add", {
+        name: newTokenName.trim(),
+        token: newTokenValue.trim()
+      }) as GoLoginToken[];
+      setTokens(updatedTokens);
+      setNewTokenName("");
+      setNewTokenValue("");
+      toast.success("Token added successfully!");
+    } catch (error: any) {
+      toast.error(`Failed to add token: ${error.message}`);
+    }
+  };
+
+  const handleDeleteToken = async (index: number) => {
+    try {
+      const updatedTokens = await window.api.invoke("tokens:delete", index) as GoLoginToken[];
+      setTokens(updatedTokens);
+      toast.success("Token deleted successfully!");
+    } catch (error: any) {
+      toast.error(`Failed to delete token: ${error.message}`);
+    }
+  };
+
+  const startEditing = (index: number) => {
+    setEditingIndex(index);
+    setEditName(tokens[index].name);
+    setEditToken(tokens[index].token);
+  };
+
+  const cancelEditing = () => {
+    setEditingIndex(null);
+    setEditName("");
+    setEditToken("");
+  };
+
+  const handleUpdateToken = async () => {
+    if (editingIndex === null) return;
+    
+    if (!editName.trim() || !editToken.trim()) {
+      toast.error("Please enter both name and token");
+      return;
+    }
+
+    try {
+      const updatedTokens = await window.api.invoke("tokens:update", {
+        index: editingIndex,
+        name: editName.trim(),
+        token: editToken.trim()
+      }) as GoLoginToken[];
+      setTokens(updatedTokens);
+      cancelEditing();
+      toast.success("Token updated successfully!");
+    } catch (error: any) {
+      toast.error(`Failed to update token: ${error.message}`);
+    }
+  };
+
+  const maskToken = (token: string) => {
+    if (token.length <= 20) return "••••••••••••••••";
+    return token.substring(0, 10) + "••••••••" + token.substring(token.length - 10);
+  };
+
   return (
     <div className="p-4 md:p-8 pt-16 md:pt-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
             <HardDrive className="h-8 w-8" />
-            Storage Settings
+            Settings
           </h1>
           <p className="text-muted-foreground">
-            Configure data storage and backup settings.
+            Configure storage, tokens, and backup settings.
           </p>
         </div>
         <div className="flex gap-2">
@@ -158,8 +245,8 @@ const SettingsPage = () => {
               </>
             ) : (
               <>
-            <Save className="mr-2 h-4 w-4" />
-            Save Changes
+                <Save className="mr-2 h-4 w-4" />
+                Save Changes
               </>
             )}
           </Button>
@@ -167,6 +254,112 @@ const SettingsPage = () => {
       </div>
 
       <div className="space-y-4">
+        {/* GoLogin Tokens Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5" />
+              GoLogin API Tokens
+            </CardTitle>
+            <CardDescription>
+              Manage your GoLogin API tokens. Tokens are used for profile creation and management.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Add new token */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Token name (e.g., Account 1)"
+                value={newTokenName}
+                onChange={(e) => setNewTokenName(e.target.value)}
+                className="w-40"
+              />
+              <Input
+                placeholder="Paste GoLogin API token here..."
+                value={newTokenValue}
+                onChange={(e) => setNewTokenValue(e.target.value)}
+                className="flex-1"
+                type="password"
+              />
+              <Button onClick={handleAddToken} size="icon">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Token list */}
+            <div className="space-y-2">
+              {tokens.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  No tokens configured. Add a token to start creating profiles.
+                </div>
+              ) : (
+                tokens.map((token, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30"
+                  >
+                    {editingIndex === index ? (
+                      <>
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-32"
+                        />
+                        <Input
+                          value={editToken}
+                          onChange={(e) => setEditToken(e.target.value)}
+                          className="flex-1"
+                          type="password"
+                        />
+                        <Button size="icon" variant="ghost" onClick={handleUpdateToken}>
+                          <Check className="h-4 w-4 text-green-500" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={cancelEditing}>
+                          <X className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium w-32 truncate">{token.name}</span>
+                        <code className="flex-1 text-xs text-muted-foreground font-mono">
+                          {maskToken(token.token)}
+                        </code>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => startEditing(index)}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleDeleteToken(index)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              Get your API token from{" "}
+              <a
+                href="https://app.gologin.com/personalArea/TokenApi"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                GoLogin Dashboard → API Token
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Data Directory Card */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -229,6 +422,7 @@ const SettingsPage = () => {
           </CardContent>
         </Card>
 
+        {/* Backup Settings Card */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -277,4 +471,4 @@ const SettingsPage = () => {
   );
 };
 
-export default SettingsPage; 
+export default SettingsPage;

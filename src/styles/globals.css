@@ -2,12 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ReactFlow styles - Required for drag & drop functionality */
-@import 'reactflow/dist/style.css';
-
-/* Dark mode support for workflow editor */
-@import './workflow-dark.css';
-
 * {
   padding: 0;
   margin: 0;

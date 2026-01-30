@@ -1,52 +1,53 @@
 "use client";
 
+import { BrowserUseTaskRunner } from "@/components/browser-use";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CustomPagination } from "@/components/ui/custom-pagination";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Profile, useCachedData } from "@/hooks/use-cached-data";
 
-import { ArrowUpDown, Calendar, Download, FileText, Monitor, MoreHorizontal, Pencil, Play, PlayCircle, Plus, RotateCcw, Server, Square, Upload, WifiOff, X } from "lucide-react";
+import { ArrowUpDown, Bot, Calendar, Download, FileText, Monitor, MoreHorizontal, Pencil, Play, PlayCircle, Plus, RotateCcw, Server, Square, Upload, WifiOff, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDebounce } from "use-debounce";
@@ -156,6 +157,10 @@ const ProfilesPage = () => {
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
   const [currentNotesProfile, setCurrentNotesProfile] = useState<Profile | null>(null);
   const [notesValue, setNotesValue] = useState("");
+
+  // AI Task Runner dialog states
+  const [aiTaskDialogOpen, setAiTaskDialogOpen] = useState(false);
+  const [aiTaskProfile, setAiTaskProfile] = useState<{ id: string; name: string; wsUrl: string } | null>(null);
 
   // Replace fetchAllData with refreshCache for better performance
   const fetchAllData = async () => {
@@ -544,6 +549,22 @@ const ProfilesPage = () => {
     setNotesDialogOpen(false);
     setCurrentNotesProfile(null);
     setNotesValue("");
+  };
+
+  // AI Task Runner functions
+  const openAiTaskDialog = (profileId: string, profileName: string) => {
+    const status = browserStatuses[profileId];
+    if (status?.status === 'running' && status.wsUrl) {
+      setAiTaskProfile({ id: profileId, name: profileName, wsUrl: status.wsUrl });
+      setAiTaskDialogOpen(true);
+    } else {
+      toast.error("Profile phải đang chạy để sử dụng AI Task Runner");
+    }
+  };
+
+  const closeAiTaskDialog = () => {
+    setAiTaskDialogOpen(false);
+    setAiTaskProfile(null);
   };
 
   const handleSaveNotes = async () => {
@@ -1348,12 +1369,22 @@ const ProfilesPage = () => {
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                     <DropdownMenuItem onClick={() => openDialog(profile)}>
+                                      <Pencil className="mr-2 h-4 w-4" />
                                       Edit
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={() => openAiTaskDialog(profile.Id, profile.Name)}
+                                      disabled={browserStatuses[profile.Id]?.status !== 'running'}
+                                    >
+                                      <Bot className="mr-2 h-4 w-4" />
+                                      🤖 AI Task Runner
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleImportCookie(profile.Id)}>
+                                      <Upload className="mr-2 h-4 w-4" />
                                       Import Cookie
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleExportCookie(profile.Id)}>
+                                      <Download className="mr-2 h-4 w-4" />
                                       Export Cookie
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
@@ -1688,6 +1719,33 @@ const ProfilesPage = () => {
               Lưu ghi chú
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Task Runner Dialog */}
+      <Dialog open={aiTaskDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          closeAiTaskDialog();
+        }
+      }}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              AI Task Runner - {aiTaskProfile?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {aiTaskProfile && (
+            <BrowserUseTaskRunner
+              profileId={aiTaskProfile.id}
+              cdpUrl={aiTaskProfile.wsUrl}
+              onTaskComplete={(result) => {
+                if (result.success) {
+                  toast.success("AI task hoàn thành!");
+                }
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

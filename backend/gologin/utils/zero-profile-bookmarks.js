@@ -135,9 +135,9 @@ export const zeroProfileBookmarks = {
         'type': 'url',
         'url': 'https://www.tiktok.com/',
       }, {
-        'name': 'Google family',
+        'name': 'Google Ads',
         'type': 'url',
-        'url': 'https://g.co/yourfamily',
+        'url': 'https://ads.google.com/',
       }, {
         'name': 'Browser check',
         'type': 'url',

@@ -5,6 +5,12 @@ type Channels =
   | "settings:set"
   | "dialog:open"
   | "dialog:selectFolder"
+  // Token Management channels
+  | "tokens:get"
+  | "tokens:add"
+  | "tokens:update"
+  | "tokens:delete"
+  | "tokens:reload"
   // Group channels
   | "groups:get"
   | "groups:create"
@@ -53,6 +59,14 @@ type Channels =
   | "cookies:upload"
   | "cookies:download"
   | "cookies:sync"
+  // Browser-Use AI Agent channels
+  | "browser-use:start"
+  | "browser-use:stop"
+  | "browser-use:health"
+  | "browser-use:status"
+  | "browser-use:run-task"
+  | "browser-use:connect"
+  | "browser-use:disconnect"
   // Keep old ones for now, will be removed later
   | "get-users"
   | "delete-user"

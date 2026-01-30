@@ -6,46 +6,38 @@ import { cleanupEnhancedBrowserServiceHandlers, initializeEnhancedBrowserService
 import { PORT } from "./constants";
 import { getDatabase } from "./database";
 import { unixToLDAP } from "./gologin/cookies/cookies-manager";
+import { cleanupBrowserUseHandlers, initializeBrowserUseHandlers } from "./handlers/browser-use-handlers";
 import { Settings } from "./interfaces";
+import { getBrowserUseService } from "./services/browser-use-service";
+import { tokenService } from "./services/token-service";
 // TODO: Complete GoLogin service integration later
 // import { GoLoginService } from "./services/gologin-service";
+import console from "node:console";
 import store from "./store";
 // Directly require the CommonJS module.
 const { GoLogin, GologinApi } = require('./gologin/gologin.js');
 
 const fs = require('fs').promises;
 
-// GoLogin token array for rotation and retry
-const GOLOGIN_TOKENS = [
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODdkMzVhMzZhNjE3M2FmMzkzOTU2NWEiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODdkMzYyOThjZmVlMzc1NjU4OWUxZTkifQ.8ZVr4Hhe43nudQj2FP6o6EAH2ZmVqqALflYsBCiMenk",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MjE0YWM3MzdhMTIwZjRlZDk2OTM2YTYiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODNkYmQzMDllZjNmNzMyNjk1ODA3ZTYifQ.gUN3PNj6BkIwUm9urC3a2IuVniwvltW_OUvJkxXaDeo",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODdkMzlkNGFiZTlkMGQwMDhjNDllMzEiLCJ0eXBlIjoiZGV2Iiwiand0aWQiOiI2ODdkM2E1YTc4MjU0YWM1ZjkzYjE1ZGMifQ.nAYlAOoV8MxGCaLAWK_GkZdOu5AWFaady1h8ceCfj_A"
-];
-
-// Token rotation state
-let currentTokenIndex = 0;
-
 /**
- * Get current token for API calls
+ * Get current token for API calls (async wrapper for tokenService)
  */
-function getCurrentToken(): string {
-  return GOLOGIN_TOKENS[currentTokenIndex];
+async function getCurrentTokenAsync(): Promise<string | null> {
+  return await tokenService.getCurrentToken();
 }
 
 /**
  * Rotate to next token for retry
  */
-function rotateToNextToken(): string {
-  currentTokenIndex = (currentTokenIndex + 1) % GOLOGIN_TOKENS.length;
-  console.log(`🔄 Rotating to token ${currentTokenIndex + 1}/${GOLOGIN_TOKENS.length}`);
-  return getCurrentToken();
+async function rotateToNextTokenAsync(): Promise<string | null> {
+  return await tokenService.rotateToNextToken();
 }
 
 /**
  * Reset token rotation to first token
  */
-function resetTokenRotation(): void {
-  currentTokenIndex = 0;
+async function resetTokenRotationAsync(): Promise<void> {
+  await tokenService.resetTokenRotation();
 }
 
 
@@ -73,14 +65,7 @@ const verboseSqlite3 = sqlite3.verbose();
 //   console.warn('WebSocket module not available');
 // }
 
-// Add global type declaration at the top
-declare global {
-  var cachedData: {
-    profiles: any[];
-    groups: any[];
-    lastUpdated: number;
-  };
-}
+// Global type declarations removed - no more caching
 
 /**
  * Creates the main application window.
@@ -198,83 +183,16 @@ async function initializeCriticalServices(): Promise<void> {
     console.log(`   📁 ${processedProfiles.length} profiles (with parsed data)`);
     console.log(`   📂 ${groups.length} groups`);
     console.log(`   🌐 ${proxies.length} proxies`);
-    
-    // Cache ALL data for instant IPC responses with extended information
-    (global as any).cachedData = {
-      profiles: processedProfiles,
-      groups,
-      proxies,
-      lastUpdated: Date.now(),
-      loadTime: Date.now(),
-      version: '1.0.0' // For cache versioning
-    };
-    
-    // Background auto-refresh disabled for better performance
-    // Users can manually refresh via cache:refresh or cache:forceRefresh handlers
-    
+
+    // No caching - all data loaded directly from database on demand
+
   } catch (error) {
     console.error('❌ [Startup] Critical services initialization failed:', error);
-    // Don't fail app startup for database issues - continue with empty data
-    (global as any).cachedData = {
-      profiles: [],
-      groups: [],
-      proxies: [],
-      lastUpdated: Date.now(),
-      loadTime: Date.now(),
-      version: '1.0.0',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
+    // Don't fail app startup for database issues
   }
 }
 
-/**
- * Background cache refresh function
- */
-async function refreshCacheInBackground(): Promise<void> {
-  console.log('🔄 [Background] Refreshing cache...');
-  
-  try {
-    const { Profile, Group } = await getDatabase();
-    const [profiles, groups, proxies] = await Promise.all([
-      Profile.findAll({ raw: true, nest: true, order: [['CreatedAt', 'DESC']] }),
-      Group.findAll({ raw: true, order: [['Name', 'ASC']] }),
-      Promise.resolve(store.get("proxies", []))
-    ]);
-    
-    // Process profiles with computed fields
-    const processedProfiles = profiles.map((profile: any) => {
-      let parsedJsonData = {};
-      try {
-        if (profile.JsonData && typeof profile.JsonData === 'string') {
-          parsedJsonData = JSON.parse(profile.JsonData);
-        }
-      } catch (e) {
-        // Ignore parse errors for background refresh
-      }
-      
-      return {
-        ...profile,
-        ParsedJsonData: parsedJsonData,
-        GroupName: (groups as any[]).find((g: any) => g.Id === profile.GroupId)?.Name || 'No Group',
-        LastRunFormatted: profile.LastRunAt ? new Date(profile.LastRunAt).toLocaleString() : 'Never',
-        CreatedAtFormatted: profile.CreatedAt ? new Date(profile.CreatedAt).toLocaleString() : 'Unknown'
-      };
-    });
-    
-    // Update cache
-    if ((global as any).cachedData) {
-      (global as any).cachedData.profiles = processedProfiles;
-      (global as any).cachedData.groups = groups;
-      (global as any).cachedData.proxies = proxies;
-      (global as any).cachedData.lastUpdated = Date.now();
-    }
-    
-    console.log(`✅ [Background] Cache refreshed: ${processedProfiles.length} profiles, ${groups.length} groups, ${proxies.length} proxies`);
-    
-  } catch (error) {
-    console.error('❌ [Background] Cache refresh failed:', error);
-  }
-}
+// Cache refresh function removed - no more caching
 
 /**
  * Initialize all non-critical services in separate background threads
@@ -291,9 +209,15 @@ async function refreshCacheInBackground(): Promise<void> {
 app.whenReady().then(async () => {
   console.log('🚀 [Startup] App ready, starting initialization...');
   
+  // Step 0: Initialize token service first
+  await tokenService.initialize();
+  console.log('✅ [Startup] Token service initialized');
+  
   // Step 1: Initialize critical services (database) - FAST
   await initializeCriticalServices();
   initializeEnhancedBrowserServiceHandlers();
+  initializeBrowserUseHandlers();
+  
   // Step 2: Prepare frontend and create window - FAST
   await prepareNext("./src", PORT);
   createWindow();
@@ -301,7 +225,17 @@ app.whenReady().then(async () => {
   console.log('✅ [Startup] App window created successfully');
   
   // Step 3: Initialize background services - NON-BLOCKING
-  
+  // Auto-start Browser-Use Python service in background
+  const browserUseSvc = getBrowserUseService();
+  browserUseSvc.start().then((started: boolean) => {
+    if (started) {
+      console.log('✅ [Startup] Browser-Use service started successfully');
+    } else {
+      console.warn('⚠️ [Startup] Browser-Use service failed to start (will retry on first use)');
+    }
+  }).catch((error: Error) => {
+    console.error('❌ [Startup] Browser-Use service error:', error);
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -313,6 +247,7 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     // Cleanup services before quitting
     cleanupEnhancedBrowserServiceHandlers();
+    cleanupBrowserUseHandlers();
     app.quit();
   }
 });
@@ -320,124 +255,51 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   // Cleanup services before quitting
   cleanupEnhancedBrowserServiceHandlers();
+  cleanupBrowserUseHandlers();
 });
 
 /* ++++++++++ IPC Handlers ++++++++++ */
 
-// Cache status and info handlers  
-ipcMain.handle("cache:getStatus", async () => {
-  if (!(global as any).cachedData) {
-    return { 
-      status: 'not_initialized', 
-      message: 'Cache not yet initialized' 
-    };
-  }
-  
-  const cache = (global as any).cachedData;
-  const ageInSeconds = Math.floor((Date.now() - cache.lastUpdated) / 1000);
-  const loadTimeSeconds = Math.floor((Date.now() - cache.loadTime) / 1000);
-  
-  return {
-    status: 'ready',
-    version: cache.version || '1.0.0',
-    lastUpdated: cache.lastUpdated,
-    ageInSeconds,
-    loadTimeSeconds,
-    profileCount: cache.profiles?.length || 0,
-    groupCount: cache.groups?.length || 0,
-    proxyCount: cache.proxies?.length || 0,
-    hasError: !!cache.error,
-    error: cache.error || null,
-    message: `Cache ready with ${cache.profiles?.length || 0} profiles, ${cache.groups?.length || 0} groups, ${cache.proxies?.length || 0} proxies`
-  };
-});
+// Cache handlers removed - no more caching, all data loaded directly from database
 
-ipcMain.handle("cache:forceRefresh", async () => {
-  console.log('🔄 [Manual] Force refreshing cache...');
-  try {
-    await refreshCacheInBackground();
-    return { 
-      success: true, 
-      message: 'Cache refreshed successfully',
-      timestamp: Date.now()
-    };
-  } catch (error: any) {
-    console.error('❌ [Manual] Force refresh failed:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to refresh cache'
-    };
-  }
-});
-
-// Alias for backward compatibility
-ipcMain.handle("cache:refresh", async () => {
-  console.log('🔄 [Legacy] Cache refresh requested (redirecting to forceRefresh)...');
-  try {
-    await refreshCacheInBackground();
-    return { 
-      success: true, 
-      message: 'Cache refreshed successfully',
-      timestamp: Date.now()
-    };
-  } catch (error: any) {
-    console.error('❌ [Legacy] Cache refresh failed:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to refresh cache'
-    };
-  }
-});
-
-// Proxies - Load from cache first
+// Proxies - Load directly from store
 ipcMain.handle("proxies:get", async () => {
-  // Return cached proxies if available and recent
-  if ((global as any).cachedData && (global as any).cachedData.proxies && 
-      (Date.now() - (global as any).cachedData.lastUpdated) < 30000) {
-    console.log('📊 [Cache] Returning cached proxies data');
-    return (global as any).cachedData.proxies;
-  }
-  
-  // Fallback to store
-  console.log('🔄 [Store] Loading fresh proxies data');
-  const proxies = store.get("proxies", []);
-  
-  // Update cache
-  if ((global as any).cachedData) {
-    (global as any).cachedData.proxies = proxies;
-    (global as any).cachedData.lastUpdated = Date.now();
-  }
-  
-  return proxies;
+  console.log('🔄 [Store] Loading proxies data');
+  return store.get("proxies", []);
 });
 
-// Groups - Optimized with caching
+// Groups - Load directly from database
 ipcMain.handle("groups:get", async () => {
-  // Return cached data if available and recent (< 30 seconds old)
-  if ((global as any).cachedData && (Date.now() - (global as any).cachedData.lastUpdated) < 30000) {
-    console.log('📊 [Cache] Returning cached groups data');
-    return (global as any).cachedData.groups;
-  }
-  
-  // Fallback to database if cache is stale or missing
-  console.log('🔄 [Database] Loading fresh groups data');
+  console.log('🔄 [Database] Loading groups data');
   try {
     const { Group } = await getDatabase();
-    const groups = await Group.findAll({ raw: true });
-    
-    // Update cache
-    if ((global as any).cachedData) {
-      (global as any).cachedData.groups = groups;
-      (global as any).cachedData.lastUpdated = Date.now();
-    }
-    
-    return groups;
+    return await Group.findAll({ raw: true });
   } catch (error) {
     console.error('❌ Error loading groups:', error);
     return [];
   }
+});
+
+// Token Management IPC Handlers
+ipcMain.handle("tokens:get", async () => {
+  return await tokenService.getTokens();
+});
+
+ipcMain.handle("tokens:add", async (_event, { name, token }: { name: string; token: string }) => {
+  return await tokenService.addToken(name, token);
+});
+
+ipcMain.handle("tokens:update", async (_event, { index, name, token }: { index: number; name: string; token: string }) => {
+  return await tokenService.updateToken(index, name, token);
+});
+
+ipcMain.handle("tokens:delete", async (_event, index: number) => {
+  return await tokenService.deleteToken(index);
+});
+
+ipcMain.handle("tokens:reload", async () => {
+  await tokenService.reload();
+  return await tokenService.getTokens();
 });
 
 ipcMain.handle("groups:create", async (_event, groupData) => {
@@ -451,14 +313,6 @@ ipcMain.handle("groups:create", async (_event, groupData) => {
   try {
     const group = await Group.create(groupData);
     const result = group.toJSON();
-    
-    // Update cache immediately
-    if ((global as any).cachedData) {
-      (global as any).cachedData.groups.push(result);
-      (global as any).cachedData.lastUpdated = Date.now();
-      console.log('🔄 [Cache] Added new group to cache');
-    }
-    
     return result.Id; // Return the ID of the created group
   } catch (error: any) {
     console.error('Error creating group:', error);
@@ -477,19 +331,9 @@ ipcMain.handle("groups:update", async (_event, groupData) => {
   
   try {
     const result = await Group.update(data, { where: { Id } });
-    
+
     // Check if update was successful (at least 1 row affected)
     if (result[0] > 0) {
-      // Update cache immediately if successful
-      if ((global as any).cachedData) {
-        const groupIndex = (global as any).cachedData.groups.findIndex((g: any) => g.Id === Id);
-        if (groupIndex !== -1) {
-          (global as any).cachedData.groups[groupIndex] = { ...groupData };
-          (global as any).cachedData.lastUpdated = Date.now();
-          console.log('🔄 [Cache] Updated group in cache');
-        }
-      }
-      
       return true; // Return true when successful
     } else {
       console.warn(`Group update failed: No rows affected for group ${Id}`);
@@ -506,16 +350,9 @@ ipcMain.handle("groups:delete", async (_event, groupId) => {
   
   try {
     const result = await Group.destroy({ where: { Id: groupId } });
-    
+
     // Check if deletion was successful (at least 1 row affected)
     if (result > 0) {
-      // Update cache immediately if successful
-      if ((global as any).cachedData) {
-        (global as any).cachedData.groups = (global as any).cachedData.groups.filter((g: any) => g.Id !== groupId);
-        (global as any).cachedData.lastUpdated = Date.now();
-        console.log('🔄 [Cache] Removed group from cache');
-      }
-      
       return true; // Return true when successful
     } else {
       console.warn(`Group deletion failed: No rows affected for group ${groupId}`);
@@ -527,27 +364,12 @@ ipcMain.handle("groups:delete", async (_event, groupId) => {
   }
 });
 
-// Profiles - Optimized with caching
+// Profiles - Load directly from database
 ipcMain.handle("profiles:get", async () => {
-  // Return cached data if available and recent (< 30 seconds old)
-  if ((global as any).cachedData && (Date.now() - (global as any).cachedData.lastUpdated) < 30000) {
-    console.log('📊 [Cache] Returning cached profiles data');
-    return (global as any).cachedData.profiles;
-  }
-  
-  // Fallback to database if cache is stale or missing
-  console.log('🔄 [Database] Loading fresh profiles data');
+  console.log('🔄 [Database] Loading profiles data');
   try {
     const { Profile } = await getDatabase();
-    const profiles = await Profile.findAll({ raw: true, nest: true });
-    
-    // Update cache
-    if ((global as any).cachedData) {
-      (global as any).cachedData.profiles = profiles;
-      (global as any).cachedData.lastUpdated = Date.now();
-    }
-    
-    return profiles;
+    return await Profile.findAll({ raw: true, nest: true });
   } catch (error) {
     console.error('❌ Error loading profiles:', error);
     return [];
@@ -578,7 +400,7 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     
     const { Profile } = await getDatabase();
     const profilesPath = store.get("dataPath") || app.getPath("userData");
-    const access_token = getCurrentToken();
+    const access_token = await getCurrentTokenAsync();
     
     if (!access_token) {
       throw new Error("GoLogin token not found. Please configure it in Settings.");
@@ -629,7 +451,7 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     profileData.JsonData = JSON.stringify(JsonData);
     
     // Create GoLogin instance with current token for operations
-    const currentToken = getCurrentToken();
+    const currentToken = await getCurrentTokenAsync();
     const goLogin = new GoLogin({token: currentToken, profile_id: profileId, tmpdir: profilesPath });
 
     // Clean up remote profile (we only need local copy)
@@ -641,17 +463,9 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
       // Don't fail the entire operation for this
     }
     
-    // Download and extract profile with retry
-    await retryWithBackoff(
-      async () => {
-        
-        await goLogin.downloadProfileAndExtract(profileData, true);
-        console.log(`Profile downloaded and extracted to: ${goLogin.profilePath()}`);
-      },
-      3, // maxRetries
-      3000, // baseDelay (longer for downloads)
-      `Failed to download profile ${profileId}`
-    );
+    // Download and extract profile
+    await goLogin.downloadProfileAndExtract(profileData, true);
+    console.log(`Profile downloaded and extracted to: ${goLogin.profilePath()}`);
     
     // Create startup script
     try {
@@ -678,16 +492,7 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     profileData.Id = profileId;
     
     try {
-      const createdProfile = await Profile.create(profileData);
-      
-      // Update cache immediately after successful creation
-      if ((global as any).cachedData) {
-        const newProfileData = createdProfile.toJSON();
-        (global as any).cachedData.profiles.unshift(newProfileData); // Add to beginning (latest first)
-        (global as any).cachedData.lastUpdated = Date.now();
-        console.log('🔄 [Cache] Added new profile to cache');
-      }
-      
+      await Profile.create(profileData);
       console.log(`Profile ${profileId} saved to database successfully`);
       return profileId;
     } catch (error: any) {
@@ -945,7 +750,7 @@ app.on('before-quit', () => {
 
 ipcMain.handle("profiles:launch", async (_event, profileId) => {
   const { Profile, profilesPath } = await getDatabase();
-  const token = getCurrentToken();
+  const token = await getCurrentTokenAsync();
   if (!token) {
     throw new Error("GoLogin token not found. Please configure it in Settings.");
   }
@@ -969,24 +774,17 @@ ipcMain.handle("profiles:launch", async (_event, profileId) => {
     goLogin.writeCookiesFromServer = false;
     const profile = await Profile.findOne({ where: { Id: profileId } });
     if (!profile) throw new Error("Profile not found");
-    
-    // Create startup with retry (reduced retry count to prevent multiple launches)
 
+    // Parse profile data from database
     const profileData = JSON.parse(profile.get('JsonData') as string);
-    await retryWithBackoff(
-      async () => await goLogin.createStartupCustom(true, profileData),
-      1, // maxRetries reduced to 1 to prevent multiple launches
-      1000, // baseDelay
-      `Failed to create startup for profile ${profileId}`
-    );
-    
-    // Spawn browser with enhanced retry logic
-    const wsUrl = await retryWithBackoff(
-      async () => await goLogin.spawnBrowser(),
-      2, // maxRetries
-      2000, // baseDelay (longer for browser spawn)
-      `Failed to spawn browser for profile ${profileId}`
-    );
+
+    // Create startup from local data
+    await goLogin.createStartupCustom(true, profileData);
+
+    // Spawn browser
+    const wsUrlResult = await goLogin.spawnBrowser();
+    // wsUrl can be string or object {wsUrl: string, resolution: {...}}
+    const wsUrl = typeof wsUrlResult === 'string' ? wsUrlResult : wsUrlResult?.wsUrl;
     console.log('wsUrl:', wsUrl);
     goLogin.setActive(true);
     (profile as any).LastRunAt = new Date();
@@ -1126,7 +924,7 @@ ipcMain.handle("profiles:restartBrowser", async (_event, profileId) => {
     
     // Start again - reuse launch logic
     const { Profile, profilesPath } = await getDatabase();
-    const token = getCurrentToken();
+    const token = await getCurrentTokenAsync();
     if (!token) {
       throw new Error("GoLogin token not found. Please configure it in Settings.");
     }
@@ -1142,50 +940,15 @@ ipcMain.handle("profiles:restartBrowser", async (_event, profileId) => {
     goLogin.writeCookiesFromServer = false;
     const profile = await Profile.findOne({ where: { Id: profileId } });
     if (!profile) throw new Error("Profile not found");
-    
-    await retryWithBackoff(
-      async () => await goLogin.createStartupCustom(true, JSON.parse(profile.get('JsonData') as string)),
-      1, 1000, `Failed to create startup for profile ${profileId}` // Reduced retry count
-    );
-    
-    // Spawn browser with same enhanced logic as launch
-    const wsUrl = await retryWithBackoff(
-      async () => {
-        try {
-          const url = await goLogin.spawnBrowser();
-          
-          if (url && goLogin.port) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            try {
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 5000);
-              
-              const testResponse = await fetch(`http://127.0.0.1:${goLogin.port}/json/version`, {
-                signal: controller.signal
-              });
-              clearTimeout(timeoutId);
-              
-              if (!testResponse.ok) {
-                throw new Error(`Browser not responsive on port ${goLogin.port}`);
-              }
-            } catch (connError: any) {
-              console.warn(`Browser connection test failed during restart: ${connError.message}`);
-            }
-          }
-          
-          return url;
-        } catch (error: any) {
-          console.error(`Browser restart spawn failed:`, {
-            error: error.message,
-            port: goLogin.port,
-            profileId
-          });
-          throw error;
-        }
-      },
-      3, 3000, `Failed to spawn browser for profile ${profileId}` // Enhanced retry for restart
-    );
+
+    // Parse profile data and create startup
+    const profileData = JSON.parse(profile.get('JsonData') as string);
+    await goLogin.createStartupCustom(true, profileData);
+
+    // Spawn browser
+    const wsUrlResult = await goLogin.spawnBrowser();
+    // wsUrl can be string or object {wsUrl: string, resolution: {...}}
+    const wsUrl = typeof wsUrlResult === 'string' ? wsUrlResult : wsUrlResult?.wsUrl;
     
     goLogin.setActive(true);
     runningProfiles.set(profileId, {
@@ -1245,20 +1008,28 @@ ipcMain.handle("profiles:update", async (_event, profileData) => {
   const { Id, ...data } = profileData;
   
   try {
-    const result = await Profile.update(data, { where: { Id } });
-    
-    // Check if update was successful (at least 1 row affected)
-    if (result[0] > 0) {
-      // Update cache immediately if successful
-      if ((global as any).cachedData) {
-        const profileIndex = (global as any).cachedData.profiles.findIndex((p: any) => p.Id === Id);
-        if (profileIndex !== -1) {
-          (global as any).cachedData.profiles[profileIndex] = { ...profileData };
-          (global as any).cachedData.lastUpdated = Date.now();
-          console.log('🔄 [Cache] Updated profile in cache');
+    // If Name is being updated, also update it in JsonData
+    if (data.Name) {
+      const profile = await Profile.findOne({ where: { Id } });
+      if (profile) {
+        const jsonDataStr = profile.get('JsonData') as string;
+        if (jsonDataStr) {
+          try {
+            const jsonData = JSON.parse(jsonDataStr);
+            jsonData.name = data.Name; // Update name in JsonData
+            data.JsonData = JSON.stringify(jsonData);
+            console.log(`Updated profile name in JsonData: ${data.Name}`);
+          } catch (parseError) {
+            console.warn(`Failed to parse JsonData for profile ${Id}:`, parseError);
+          }
         }
       }
-      
+    }
+    
+    const result = await Profile.update(data, { where: { Id } });
+
+    // Check if update was successful (at least 1 row affected)
+    if (result[0] > 0) {
       return true; // Return true when successful
     } else {
       console.warn(`Profile update failed: No rows affected for profile ${Id}`);
@@ -1304,13 +1075,6 @@ ipcMain.handle("profiles:delete", async (_event, profileId) => {
       throw new Error(`Failed to delete profile ${profileId} from database`);
     }
 
-    // Update cache immediately after successful deletion
-    if ((global as any).cachedData) {
-      (global as any).cachedData.profiles = (global as any).cachedData.profiles.filter((p: any) => p.Id !== profileId);
-      (global as any).cachedData.lastUpdated = Date.now();
-      console.log('🔄 [Cache] Removed profile from cache');
-    }
-
     console.log(`Successfully deleted profile ${profileId} from database`);
     return true;
 
@@ -1322,7 +1086,7 @@ ipcMain.handle("profiles:delete", async (_event, profileId) => {
 
 ipcMain.handle("profiles:exportCookie", async (_event, profileId: string) => {
   const { profilesPath } = await getDatabase();
-  const token = getCurrentToken();
+  const token = await getCurrentTokenAsync();
   if (!token) {
     throw new Error("GoLogin token not found. Please configure it in Settings.");
   }
@@ -1331,14 +1095,9 @@ ipcMain.handle("profiles:exportCookie", async (_event, profileId: string) => {
   const goLogin = new GoLogin({ token, profile_id: profileId, tmpdir: profilesPath });
   const secondaryCookiePath = path.join(profilesPath, `gologin_profile_${profileId}`, 'Default', 'Network', 'Cookies');
   console.log(secondaryCookiePath)
-  // Get cookies with retry mechanism
-  const cookies = await retryWithBackoff(
-    async () => await goLogin.GetCookieCustome(secondaryCookiePath),
-    3, // maxRetries
-    1500, // baseDelay
-    `Failed to export cookies for profile ${profileId}`
-  );
-  
+  // Get cookies
+  const cookies = await goLogin.GetCookieCustome(secondaryCookiePath);
+
   return JSON.stringify(cookies, null, 2);
 });
 
@@ -1728,19 +1487,29 @@ export async function retryWithTokenRotation<T>(
   errorMessage: string = 'GoLogin operation failed'
 ): Promise<T> {
   let lastError: Error = new Error('Unknown error');
-  resetTokenRotation(); // Start from first token
+  await resetTokenRotationAsync(); // Start from first token
   
-  for (let attempt = 1; attempt <= GOLOGIN_TOKENS.length; attempt++) {
-    const currentToken = getCurrentToken();
+  const tokenCount = await tokenService.getTokenCount();
+  
+  if (tokenCount === 0) {
+    throw new Error('No GoLogin tokens configured. Please add tokens in Settings.');
+  }
+  
+  for (let attempt = 1; attempt <= tokenCount; attempt++) {
+    const currentToken = await getCurrentTokenAsync();
+    
+    if (!currentToken) {
+      throw new Error('No GoLogin tokens available. Please add tokens in Settings.');
+    }
     
     try {
-      console.log(`🚀 ${errorMessage} (attempt ${attempt}/${GOLOGIN_TOKENS.length}) with token ${currentTokenIndex + 1}`);
+      console.log(`🚀 ${errorMessage} (attempt ${attempt}/${tokenCount})`);
       return await operation(currentToken);
     } catch (error: any) {
       lastError = error;
       
       // Log the failed token attempt
-      console.error(`❌ Token ${currentTokenIndex + 1} failed:`, error.message);
+      console.error(`❌ Token attempt ${attempt} failed:`, error.message);
       
       // Don't retry on certain types of errors
       if (error.message?.includes('Profile name is required') || 
@@ -1748,19 +1517,19 @@ export async function retryWithTokenRotation<T>(
         throw error; // Don't retry validation errors
       }
       
-      if (attempt === GOLOGIN_TOKENS.length) {
+      if (attempt === tokenCount) {
         break; // Last token, will throw below
       }
       
       // Rotate to next token for retry
-      rotateToNextToken();
+      await rotateToNextTokenAsync();
       
       // Small delay between token attempts
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
   
-  throw new Error(`${errorMessage} after trying all ${GOLOGIN_TOKENS.length} tokens. Last error: ${lastError.message}`);
+  throw new Error(`${errorMessage} after trying all ${tokenCount} tokens. Last error: ${lastError.message}`);
 }
 
 // Add shell:open-path handler

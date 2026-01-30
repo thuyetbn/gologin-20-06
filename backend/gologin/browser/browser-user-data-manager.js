@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { promises as _promises, createWriteStream, rmdirSync } from 'fs';
+import { promises as _promises } from 'fs';
 import { homedir, tmpdir } from 'os';
 import { dirname, join, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
@@ -8,7 +8,7 @@ import { fontsCollection } from '../fonts.js';
 import { FALLBACK_API_URL } from '../utils/common.js';
 import { makeRequest } from '../utils/http.js';
 
-const { access, readFile, writeFile, mkdir, readdir, copyFile, rename } = _promises;
+const { access, readFile, writeFile, mkdir, readdir, copyFile, rename, rm } = _promises;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -67,13 +67,15 @@ export const downloadFonts = async (fontsList = [], profilePath) => {
   const files = await readdir(browserFontsPath);
   const fontsToDownload = fontsList.filter(font => !files.includes(font));
 
-  let promises = fontsToDownload.map(font => makeRequest(FONTS_URL + font, {
-    maxAttempts: 5,
-    retryDelay: 2000,
-    timeout: 30 * 1000,
-  })
-    .pipe(createWriteStream(join(browserFontsPath, font))),
-  );
+  let promises = fontsToDownload.map(async font => {
+    const body = await makeRequest(FONTS_URL + font, {
+      maxAttempts: 5,
+      retryDelay: 2000,
+      timeout: 30 * 1000,
+    });
+
+    await writeFile(join(browserFontsPath, font), body);
+  });
 
   if (promises.length) {
     await Promise.all(promises);
@@ -104,7 +106,8 @@ export const composeFonts = async (fontsList = [], profilePath, differentOs = fa
   const pathToFontsDir = join(profilePath, FONTS_DIR_NAME);
   const fontsDirExists = await access(pathToFontsDir).then(() => true, () => false);
   if (fontsDirExists) {
-    rmdirSync(pathToFontsDir, { recursive: true });
+    // Use fs.rm instead of deprecated rmdirSync
+    await rm(pathToFontsDir, { recursive: true, force: true });
   }
 
   await mkdir(pathToFontsDir, { recursive: true });

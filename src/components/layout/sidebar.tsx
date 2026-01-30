@@ -6,14 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
-    GitBranch,
     Globe,
     Home,
     Menu,
     Monitor,
     Settings,
-    Users,
-    Workflow
+    Users
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -75,16 +73,6 @@ const Sidebar = () => {
       name: "Proxies",
       href: "/proxies",
       icon: Globe,
-    },
-    {
-      name: "Workflow Editor",
-      href: "/workflow-editor-simple",
-      icon: Workflow,
-    },
-    {
-      name: "Non-Linear Demo",
-      href: "/non-linear-demo",
-      icon: GitBranch,
     },
     {
       name: "Browser Management",

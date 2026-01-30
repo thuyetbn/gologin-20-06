@@ -1,17 +1,16 @@
 # 🔐 GoLogin Manager - ThuyetBN
 
-> Advanced Browser Profile Management Tool with Enhanced Workflow Editor
+> Advanced Browser Profile Management Tool
 
 ---
 
 ## 📋 Tổng quan
 
-GoLogin Manager là một công cụ quản lý profile browser mạnh mẽ, được phát triển bởi ThuyetBN. Hỗ trợ tạo và quản lý nhiều browser profile với các tính năng anti-detect tiên tiến, workflow automation, và enhanced browser stability.
+GoLogin Manager là một công cụ quản lý profile browser mạnh mẽ, được phát triển bởi ThuyetBN. Hỗ trợ tạo và quản lý nhiều browser profile với các tính năng anti-detect tiên tiến và enhanced browser stability.
 
 ## ✨ Tính năng chính
 
 - 🚀 **Browser Profile Management**: Tạo, quản lý và chạy browser profiles với anti-detect
-- 🤖 **Workflow Automation**: Visual workflow editor với state machine support
 - 🔧 **Enhanced Browser Stability**: Improved error handling và connection reliability
 - 🌍 **Multi-Platform**: Hỗ trợ Windows, macOS, và Linux
 - 📊 **Advanced Monitoring**: Real-time monitoring và logging
@@ -60,7 +59,6 @@ yarn dist:linux
 - 🍎 **[macOS Build Guide](BUILD_MACOS_GUIDE.md)** - Hướng dẫn đầy đủ cho macOS
 - ⚡ **[Quick Start macOS](QUICK_START_MACOS.md)** - Hướng dẫn nhanh cho macOS
 - 📦 **[macOS Dependencies](MACOS_DEPENDENCIES_GUIDE.md)** - Thư viện và dependencies cho macOS
-- 🎯 **[Workflow Editor Guide](WORKFLOW_EDITOR_GUIDE.md)** - Hướng dẫn sử dụng workflow editor
 
 ## 🛠️ Development Scripts
 
@@ -120,13 +118,11 @@ LOG_LEVEL=info
 - ✅ Enhanced browser stability và error handling
 - ✅ Added port diagnostics và zombie process cleanup for Windows
 - ✅ Improved spawnBrowser method với better logging
-- ✅ Fixed TypeScript errors in workflow editor components
-- ✅ Added state-aware workflow editor với enhanced node management
 - ✅ Improved browser startup process với retry logic
-- ✅ Added workflow templates và execution engine
 - ✅ Fixed build issues và type compatibility
 - ✅ Added macOS build support với universal binary
 - ✅ Added new dependencies: portfinder, is-port-reachable, node-fetch
+- ✅ Removed workflow editor features to simplify the application
 
 ## 📁 Project Structure
 
