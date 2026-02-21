@@ -424,6 +424,58 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     const profileGologin = await retryWithTokenRotation(
       async (token: string) => {
         const GL = GologinApi({ token });
+
+        // Use custom params if OS or navigator config provided
+        if (profileData.os || profileData.navigator) {
+          const hasUserAgent = profileData.navigator?.userAgent?.trim();
+
+          if (hasUserAgent) {
+            // Full custom profile with navigator (requires userAgent)
+            const customOptions: any = {
+              os: profileData.os || 'win',
+              name: profileData.Name,
+            };
+            if (profileData.osSpec) {
+              customOptions.osSpec = profileData.osSpec;
+            }
+            if (profileData.navigator) {
+              customOptions.navigator = profileData.navigator;
+            }
+            console.log('🔧 Creating profile with full custom params:', JSON.stringify(customOptions, null, 2));
+            try {
+              const profileId = await GL.createProfileWithCustomParams(customOptions);
+              if (!profileId) {
+                throw new Error("Failed to create profile: Invalid response from GoLogin API.");
+              }
+              return { id: profileId };
+            } catch (err: any) {
+              const errMsg = typeof err?.message === 'object' ? JSON.stringify(err.message) : (err?.message || JSON.stringify(err));
+              console.error('❌ createProfileWithCustomParams error details:', errMsg);
+              throw new Error(`GoLogin API error: ${errMsg}`);
+            }
+          } else {
+            // OS-only customization: use quick endpoint with custom os/osSpec
+            const { makeRequest } = await import('./gologin/utils/http.js');
+            const { API_URL, FALLBACK_API_URL } = await import('./gologin/utils/common.js');
+
+            const quickOptions = {
+              os: profileData.os || 'win',
+              name: profileData.Name,
+              ...(profileData.osSpec?.trim() ? { osSpec: profileData.osSpec } : {}),
+            };
+            console.log('🔧 Creating profile with quick params (OS only):', JSON.stringify(quickOptions, null, 2));
+            const result = await makeRequest(`${API_URL}/browser/quick`, {
+              method: 'POST',
+              json: quickOptions,
+            }, { token, fallbackUrl: `${FALLBACK_API_URL}/browser/quick` });
+            if (!result || !result.id) {
+              throw new Error("Failed to create profile: Invalid response from GoLogin API.");
+            }
+            return result;
+          }
+        }
+
+        // Default: random fingerprint (auto-detect OS)
         const result = await GL.createProfileRandomFingerprint(profileData.Name);
         if (!result || !result.id) {
           throw new Error("Failed to create profile: Invalid response from GoLogin API.");
@@ -448,6 +500,14 @@ ipcMain.handle("profiles:create", async (_event, profileData) => {
     const existingJsonData = profileData.JsonData ? JSON.parse(profileData.JsonData) : {};
 
     const JsonData = { ...newJsonData, ...existingJsonData };
+
+    // Preserve user-selected OS in JsonData for local display
+    if (profileData.os) {
+      JsonData.os = profileData.os;
+    }
+    if (profileData.osSpec) {
+      JsonData.osSpec = profileData.osSpec;
+    }
     profileData.JsonData = JSON.stringify(JsonData);
 
     // Create GoLogin instance with current token for operations
@@ -815,6 +875,9 @@ ipcMain.handle("profiles:launch", async (_event, profileId) => {
     if (goLogin.processSpawned) {
       goLogin.processSpawned.on('exit', (code: number, signal: string) => {
         console.log(`Browser process for profile ${profileId} exited with code ${code}, signal ${signal}`);
+        goLogin.sanitizeProfile().then(() => {
+          console.log(`🧹 Auto-cleared cache for profile ${profileId}`);
+        }).catch(() => { });
         cleanupRunningProfile(profileId, `Process exited (code: ${code}, signal: ${signal})`);
         updateBrowserStatus(profileId, { status: 'stopped' });
       });
@@ -827,6 +890,9 @@ ipcMain.handle("profiles:launch", async (_event, profileId) => {
 
       goLogin.processSpawned.on('close', (code: number, signal: string) => {
         console.log(`Browser process for profile ${profileId} closed with code ${code}, signal ${signal}`);
+        goLogin.sanitizeProfile().then(() => {
+          console.log(`🧹 Auto-cleared cache for profile ${profileId}`);
+        }).catch(() => { });
         cleanupRunningProfile(profileId, `Process closed (code: ${code}, signal: ${signal})`);
         updateBrowserStatus(profileId, { status: 'stopped' });
       });
@@ -863,6 +929,14 @@ ipcMain.handle("profiles:stop", async (_event, profileId) => {
     if (goLogin.processSpawned) {
       goLogin.processSpawned.kill('SIGTERM');
       console.log(`Killed process for profile ${profileId}`);
+    }
+
+    // Auto-clear Chrome cache (Cache, Code Cache, GPUCache, IndexedDB, Service Worker, etc.)
+    try {
+      await goLogin.sanitizeProfile();
+      console.log(`🧹 Cleared cache for profile ${profileId}`);
+    } catch (cacheError: any) {
+      console.warn(`⚠️ Failed to clear cache for profile ${profileId}:`, cacheError.message);
     }
 
     cleanupRunningProfile(profileId, 'Stopped manually');
@@ -1517,7 +1591,7 @@ export async function retryWithTokenRotation<T>(
     }
 
     try {
-      console.log(`🚀 ${errorMessage} (attempt ${attempt}/${tokenCount})`);
+      console.log(`🚀 Attempting: ${errorMessage} (token ${attempt}/${tokenCount})`);
       return await operation(currentToken);
     } catch (error: any) {
       lastError = error;

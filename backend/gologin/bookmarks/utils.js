@@ -8,7 +8,7 @@ export const getCurrentProfileBookmarks = async (pathToBookmarks) => {
     const currentBookmarksFileData = await readFile(pathToBookmarks, { encoding: 'utf-8' });
     bookmarks = JSON.parse(currentBookmarksFileData);
   } catch (error) {
-    console.log(error);
+    // Bookmarks file may not exist for new profiles - this is expected
   }
 
   return bookmarks;

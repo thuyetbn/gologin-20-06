@@ -21,7 +21,8 @@ const attemptRequest = async (requestUrl, options) => {
   }
 
   if (req.statusCode >= 400) {
-    const error = new Error(req.body);
+    const errorBody = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
+    const error = new Error(errorBody);
     error.statusCode = req.statusCode;
     throw error;
   }

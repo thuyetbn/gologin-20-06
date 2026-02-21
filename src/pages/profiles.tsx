@@ -4,50 +4,50 @@ import { BrowserUseTaskRunner } from "@/components/browser-use";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CustomPagination } from "@/components/ui/custom-pagination";
 import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Profile, useCachedData } from "@/hooks/use-cached-data";
 
-import { ArrowUpDown, Bot, Calendar, Download, FileText, Monitor, MoreHorizontal, Pencil, Play, PlayCircle, Plus, RotateCcw, Server, Square, Upload, WifiOff, X } from "lucide-react";
+import { ArrowUpDown, Bot, Calendar, ChevronDown, ChevronUp, Download, FileText, Globe, Monitor, MoreHorizontal, Pencil, Play, PlayCircle, Plus, RotateCcw, Server, Square, Upload, WifiOff, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDebounce } from "use-debounce";
@@ -67,35 +67,35 @@ interface BrowserStatus {
 // Import Group interface for local use
 function formatShortTime(dateString: string | null): string {
   if (!dateString) return 'Chưa chạy';
-  
+
   const date = new Date(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
+
   if (diffInSeconds < 60) {
     return 'Vừa xong';
   }
-  
+
   const diffInMinutes = Math.floor(diffInSeconds / 60);
   if (diffInMinutes < 60) {
     return `${diffInMinutes} phút trước`;
   }
-  
+
   const diffInHours = Math.floor(diffInMinutes / 60);
   if (diffInHours < 24) {
     return `${diffInHours} giờ trước`;
   }
-  
+
   const diffInDays = Math.floor(diffInHours / 24);
   if (diffInDays < 30) {
     return `${diffInDays} ngày trước`;
   }
-  
+
   const diffInMonths = Math.floor(diffInDays / 30);
   if (diffInMonths < 12) {
     return `${diffInMonths} tháng trước`;
   }
-  
+
   const diffInYears = Math.floor(diffInMonths / 12);
   return `${diffInYears} năm trước`;
 }
@@ -105,7 +105,7 @@ const ProfilesPage = () => {
   // Use optimized cached data hook instead of individual API calls
   const {
     profiles,
-    groups, 
+    groups,
     proxies,
     isLoading,
     refreshCache,
@@ -146,11 +146,12 @@ const ProfilesPage = () => {
   // Bulk selection state
   const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
   const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false);
-  const [bulkAction, setBulkAction] = useState<'export' | 'group' | 'extension' | 'proxy' | 'delete' | 'bookmark' | null>(null);
+  const [bulkAction, setBulkAction] = useState<'export' | 'group' | 'extension' | 'proxy' | 'delete' | 'bookmark' | 'useragent' | null>(null);
   const [bulkGroupId, setBulkGroupId] = useState<string>('');
   const [bulkBookmarkData, setBulkBookmarkData] = useState('');
   const [bulkExtensionData, setBulkExtensionData] = useState('');
   const [bulkProxyId, setBulkProxyId] = useState<string>('');
+  const [bulkUserAgent, setBulkUserAgent] = useState('');
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
 
   // Notes dialog states
@@ -161,6 +162,18 @@ const ProfilesPage = () => {
   // AI Task Runner dialog states
   const [aiTaskDialogOpen, setAiTaskDialogOpen] = useState(false);
   const [aiTaskProfile, setAiTaskProfile] = useState<{ id: string; name: string; wsUrl: string } | null>(null);
+
+  // OS & Navigator states for profile creation
+  const [profileOs, setProfileOs] = useState<string>('win');
+  const [profileOsSpec, setProfileOsSpec] = useState<string>('');
+  const [showNavigatorSettings, setShowNavigatorSettings] = useState(false);
+  const [navUserAgent, setNavUserAgent] = useState('');
+  const [navResolution, setNavResolution] = useState('1920x1080');
+  const [navLanguage, setNavLanguage] = useState('vi-VN');
+  const [navPlatform, setNavPlatform] = useState('Win32');
+  const [navHardwareConcurrency, setNavHardwareConcurrency] = useState('8');
+  const [navDeviceMemory, setNavDeviceMemory] = useState('8');
+  const [navMaxTouchPoints, setNavMaxTouchPoints] = useState('0');
 
   // Replace fetchAllData with refreshCache for better performance
   const fetchAllData = async () => {
@@ -210,7 +223,7 @@ const ProfilesPage = () => {
     if (!status || status.status === 'stopped') {
       return { variant: 'secondary' as const, text: 'Đã dừng', icon: <Square className="w-3 h-3" /> };
     }
-    
+
     switch (status.status) {
       case 'starting':
         return { variant: 'default' as const, text: 'Đang khởi động...', icon: <Play className="w-3 h-3 animate-pulse" /> };
@@ -238,7 +251,7 @@ const ProfilesPage = () => {
 
     // Filtering by group
     if (groupFilter !== "all") {
-      sortableItems = sortableItems.filter((profile) => 
+      sortableItems = sortableItems.filter((profile) =>
         String(profile.GroupId) === groupFilter
       );
     }
@@ -248,7 +261,7 @@ const ProfilesPage = () => {
       sortableItems.sort((a, b) => {
         const aDate = a.CreatedAt ? new Date(a.CreatedAt).getTime() : 0;
         const bDate = b.CreatedAt ? new Date(b.CreatedAt).getTime() : 0;
-        
+
         if (createAtOrder === "newest") {
           return bDate - aDate; // Newest first (descending)
         } else {
@@ -263,14 +276,14 @@ const ProfilesPage = () => {
         let bValue: any;
 
         if (sortConfig.key === "Group") {
-            aValue = a.Group?.Name || "";
-            bValue = b.Group?.Name || "";
+          aValue = a.Group?.Name || "";
+          bValue = b.Group?.Name || "";
         } else if (sortConfig.key === "LastRunAt" || sortConfig.key === "CreatedAt") {
-            aValue = a[sortConfig.key] ? new Date(a[sortConfig.key]!).getTime() : 0;
-            bValue = b[sortConfig.key] ? new Date(b[sortConfig.key]!).getTime() : 0;
+          aValue = a[sortConfig.key] ? new Date(a[sortConfig.key]!).getTime() : 0;
+          bValue = b[sortConfig.key] ? new Date(b[sortConfig.key]!).getTime() : 0;
         } else {
-            aValue = a[sortConfig.key] || "";
-            bValue = b[sortConfig.key] || "";
+          aValue = a[sortConfig.key] || "";
+          bValue = b[sortConfig.key] || "";
         }
 
         if (aValue < bValue) return sortConfig.direction === "ascending" ? -1 : 1;
@@ -293,7 +306,7 @@ const ProfilesPage = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearchQuery, groupFilter, createAtOrder]);
-  
+
   const requestSort = (key: SortableColumn) => {
     let direction: "ascending" | "descending" = "ascending";
     if (sortConfig && sortConfig.key === key && sortConfig.direction === "ascending") {
@@ -305,7 +318,7 @@ const ProfilesPage = () => {
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
+
     const rawData = {
       name: formData.get("name") as string,
       group: formData.get("group") as string,
@@ -316,9 +329,9 @@ const ProfilesPage = () => {
     setFormErrors({});
     const groupIdValue = rawData.group;
     const proxyIdValue = rawData.proxy;
-    
+
     // Prepare basic profile data
-    const profileData = {
+    const profileData: any = {
       Name: rawData.name.trim(),
       GroupId: groupIdValue === "none" ? null : Number(groupIdValue),
     };
@@ -337,7 +350,7 @@ const ProfilesPage = () => {
     if (proxyIdValue === "none") {
       jsonData.proxyEnabled = false;
       jsonData.proxy = {
-        mode:  'none',
+        mode: 'none',
         host: '',
         port: 80,
         username: '',
@@ -356,6 +369,27 @@ const ProfilesPage = () => {
         };
       }
     }
+
+    // Add OS & Navigator params for new profile creation
+    if (!currentProfile) {
+      profileData.os = profileOs;
+      if (profileOsSpec) {
+        profileData.osSpec = profileOsSpec;
+      }
+      // Build navigator object if any custom field is set
+      const nav: any = {};
+      if (navUserAgent.trim()) nav.userAgent = navUserAgent.trim();
+      if (navResolution) nav.resolution = navResolution;
+      if (navLanguage.trim()) nav.language = navLanguage.trim();
+      if (navPlatform.trim()) nav.platform = navPlatform.trim();
+      if (navHardwareConcurrency) nav.hardwareConcurrency = Number(navHardwareConcurrency);
+      if (navDeviceMemory) nav.deviceMemory = Number(navDeviceMemory);
+      nav.maxTouchPoints = Number(navMaxTouchPoints);
+      if (Object.keys(nav).length > 0) {
+        profileData.navigator = nav;
+      }
+    }
+
     const finalProfileData = {
       ...profileData,
       JsonData: JSON.stringify(jsonData)
@@ -407,7 +441,7 @@ const ProfilesPage = () => {
       setDeletingProfileId(null);
     }
   };
-  
+
   // Load running profiles helper - now optimized
   const loadRunningProfiles = async () => {
     // Just refresh cache instead of full data reload
@@ -475,7 +509,7 @@ const ProfilesPage = () => {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
-      
+
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
@@ -495,6 +529,17 @@ const ProfilesPage = () => {
   const openDialog = (profile: Profile | null = null) => {
     setCurrentProfile(profile);
     setFormErrors({});
+    // Reset OS/Navigator fields when opening dialog
+    setProfileOs('win');
+    setProfileOsSpec('');
+    setShowNavigatorSettings(false);
+    setNavUserAgent('');
+    setNavResolution('1920x1080');
+    setNavLanguage('vi-VN');
+    setNavPlatform('Win32');
+    setNavHardwareConcurrency('8');
+    setNavDeviceMemory('8');
+    setNavMaxTouchPoints('0');
     setDialogOpen(true);
   };
 
@@ -504,6 +549,30 @@ const ProfilesPage = () => {
     setFormErrors({});
   };
 
+  // Auto-update platform and touchpoints based on OS selection
+  const handleOsChange = (os: string) => {
+    setProfileOs(os);
+    setProfileOsSpec('');
+    switch (os) {
+      case 'win':
+        setNavPlatform('Win32');
+        setNavMaxTouchPoints('0');
+        break;
+      case 'mac':
+        setNavPlatform('MacIntel');
+        setNavMaxTouchPoints('0');
+        break;
+      case 'lin':
+        setNavPlatform('Linux x86_64');
+        setNavMaxTouchPoints('0');
+        break;
+      case 'android':
+        setNavPlatform('Linux armv8l');
+        setNavMaxTouchPoints('5');
+        break;
+    }
+  };
+
   // Get current proxy from profile JsonData
   const getCurrentProxy = (profile: Profile | null) => {
     if (!profile?.JsonData) return "none";
@@ -511,7 +580,7 @@ const ProfilesPage = () => {
       const jsonData = JSON.parse(profile.JsonData);
       if (jsonData.proxyEnabled && jsonData.proxy) {
         // Find matching proxy by host and port
-        const matchingProxy = proxies.find(p => 
+        const matchingProxy = proxies.find(p =>
           p.host === jsonData.proxy.host && p.port === jsonData.proxy.port
         );
         return matchingProxy ? String(matchingProxy.id) : "none";
@@ -589,9 +658,9 @@ const ProfilesPage = () => {
         ...currentNotesProfile,
         JsonData: JSON.stringify(jsonData)
       };
-      
+
       const updateResult = await window.api.invoke("profiles:update", updatedProfile);
-      
+
       if (updateResult === true) {
         // Update local cache for instant UI feedback
         updateLocalProfile(updatedProfile);
@@ -621,7 +690,7 @@ const ProfilesPage = () => {
   // Mobile Card Component
   const ProfileCard = ({ profile }: { profile: Profile }) => {
     const isSelected = selectedProfiles.has(profile.Id);
-    
+
     return (
       <Card className={`w-full ${isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' : ''}`}>
         <CardHeader className="pb-3">
@@ -656,6 +725,15 @@ const ProfilesPage = () => {
                 <DropdownMenuItem onClick={() => handleExportCookie(profile.Id)}>
                   <Download className="mr-2 h-4 w-4" />
                   Export Cookie
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  setSelectedProfiles(new Set([profile.Id]));
+                  setBulkAction('useragent');
+                  setBulkUserAgent('');
+                  setBulkActionDialogOpen(true);
+                }}>
+                  <Globe className="mr-2 h-4 w-4" />
+                  Update UserAgent
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => handleDelete(profile.Id)}
@@ -705,7 +783,7 @@ const ProfilesPage = () => {
               {profile.ProfilePath ? <Server className="w-4 h-4 inline ml-2" /> : <Monitor className="w-4 h-4 inline ml-2" />}
             </div>
           </div>
-          
+
           <div>
             <span className="text-muted-foreground text-sm">Proxy:</span>
             <div className="mt-1">
@@ -713,8 +791,8 @@ const ProfilesPage = () => {
                 (() => {
                   try {
                     const jsonData = JSON.parse(profile.JsonData);
-                    return jsonData.proxyEnabled ? 
-                      <Badge variant="secondary" className="text-xs">{jsonData.proxy.mode.toUpperCase()}|{jsonData.proxy.host}:{jsonData.proxy.port}</Badge> : 
+                    return jsonData.proxyEnabled ?
+                      <Badge variant="secondary" className="text-xs">{jsonData.proxy.mode.toUpperCase()}|{jsonData.proxy.host}:{jsonData.proxy.port}</Badge> :
                       <Badge variant="outline">Local IP</Badge>;
                   } catch {
                     return <Badge variant="outline">Local IP</Badge>;
@@ -777,7 +855,7 @@ const ProfilesPage = () => {
   };
 
   // Bulk operations
-  const handleBulkAction = (action: 'export' | 'group' | 'extension' | 'proxy' | 'delete' | 'bookmark') => {
+  const handleBulkAction = (action: 'export' | 'group' | 'extension' | 'proxy' | 'delete' | 'bookmark' | 'useragent') => {
     if (selectedProfiles.size === 0) {
       toast.error("Vui lòng chọn ít nhất một profile");
       return;
@@ -788,10 +866,10 @@ const ProfilesPage = () => {
 
   const executeBulkAction = async () => {
     if (!bulkAction || selectedProfiles.size === 0) return;
-    
+
     setIsProcessingBulk(true);
     const selectedIds = Array.from(selectedProfiles);
-    
+
     try {
       switch (bulkAction) {
         case 'export':
@@ -812,12 +890,15 @@ const ProfilesPage = () => {
         case 'bookmark':
           await handleBulkBookmarkUpdate(selectedIds, bulkBookmarkData);
           break;
+        case 'useragent':
+          await handleBulkUpdateUserAgent(selectedIds, bulkUserAgent);
+          break;
       }
-      
+
       setBulkActionDialogOpen(false);
       clearSelection();
       await fetchAllData();
-      
+
     } catch (error: any) {
       toast.error(`Lỗi thực hiện thao tác: ${error.message}`);
     } finally {
@@ -828,7 +909,7 @@ const ProfilesPage = () => {
   // Bulk operation implementations
   const handleBulkExportCookies = async (profileIds: string[]) => {
     const allCookies: any = {};
-    
+
     for (const profileId of profileIds) {
       try {
         const cookieData = await window.api.invoke("profiles:exportCookie", profileId);
@@ -838,7 +919,7 @@ const ProfilesPage = () => {
         toast.error(`❌ Lỗi export profile ${profileId}: ${error.message}`);
       }
     }
-    
+
     const blob = new Blob([JSON.stringify(allCookies, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -848,14 +929,14 @@ const ProfilesPage = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     toast.success(`🎉 Đã export cookies của ${profileIds.length} profiles`);
   };
 
   const handleBulkGroupAssignment = async (profileIds: string[], groupId: string) => {
     const groupIdNumber = groupId === 'none' ? null : Number(groupId);
     let successCount = 0;
-    
+
     for (const profileId of profileIds) {
       try {
         const profile = profiles.find(p => p.Id === profileId);
@@ -871,7 +952,7 @@ const ProfilesPage = () => {
         toast.error(`❌ Lỗi cập nhật nhóm cho profile ${profileId}: ${error.message}`);
       }
     }
-    
+
     if (successCount > 0) {
       const groupName = groups.find(g => g.Id === groupIdNumber)?.Name || 'Không có nhóm';
       toast.success(`🎉 Đã gán ${successCount}/${profileIds.length} profiles vào nhóm ${groupName}`);
@@ -882,19 +963,19 @@ const ProfilesPage = () => {
     try {
       const extensions = JSON.parse(extensionData);
       let successCount = 0;
-      
+
       for (const profileId of profileIds) {
         try {
           const profile = profiles.find(p => p.Id === profileId);
           if (profile) {
             const jsonData = JSON.parse(profile.JsonData || '{}');
             jsonData.extensions = extensions;
-            
+
             const updateResult = await window.api.invoke("profiles:update", {
               ...profile,
               JsonData: JSON.stringify(jsonData)
             });
-            
+
             if (updateResult === true) {
               successCount++;
             } else {
@@ -905,7 +986,7 @@ const ProfilesPage = () => {
           toast.error(`❌ Lỗi cập nhật extension cho profile ${profileId}: ${error.message}`);
         }
       }
-      
+
       if (successCount > 0) {
         toast.success(`🎉 Đã cập nhật extensions cho ${successCount}/${profileIds.length} profiles`);
       }
@@ -917,13 +998,13 @@ const ProfilesPage = () => {
   const handleBulkProxyAssignment = async (profileIds: string[], proxyId: string) => {
     const proxy = proxies.find(p => String(p.id) === proxyId);
     let successCount = 0;
-    
+
     for (const profileId of profileIds) {
       try {
         const profile = profiles.find(p => p.Id === profileId);
         if (profile) {
           const jsonData = JSON.parse(profile.JsonData || '{}');
-          
+
           if (proxyId === 'none') {
             jsonData.proxyEnabled = false;
             jsonData.proxy = null;
@@ -937,12 +1018,12 @@ const ProfilesPage = () => {
               password: proxy.password || ''
             };
           }
-          
+
           const updateResult = await window.api.invoke("profiles:update", {
             ...profile,
             JsonData: JSON.stringify(jsonData)
           });
-          
+
           if (updateResult === true) {
             successCount++;
           } else {
@@ -953,10 +1034,40 @@ const ProfilesPage = () => {
         toast.error(`❌ Lỗi cập nhật proxy cho profile ${profileId}: ${error.message}`);
       }
     }
-    
+
     if (successCount > 0) {
       const proxyName = proxy ? `${proxy.host}:${proxy.port}` : 'Local IP';
       toast.success(`🎉 Đã gán proxy ${proxyName} cho ${successCount}/${profileIds.length} profiles`);
+    }
+  };
+
+  const handleBulkUpdateUserAgent = async (profileIds: string[], userAgent: string) => {
+    let successCount = 0;
+    for (const profileId of profileIds) {
+      try {
+        const profile = profiles.find(p => p.Id === profileId);
+        if (profile) {
+          const jsonData = JSON.parse(profile.JsonData || '{}');
+          if (!jsonData.navigator) jsonData.navigator = {};
+          jsonData.navigator.userAgent = userAgent.trim();
+
+          const updateResult = await window.api.invoke("profiles:update", {
+            ...profile,
+            JsonData: JSON.stringify(jsonData)
+          });
+
+          if (updateResult === true) {
+            successCount++;
+          } else {
+            toast.error(`❌ Lỗi cập nhật UserAgent cho profile ${profileId}`);
+          }
+        }
+      } catch (error: any) {
+        toast.error(`❌ Lỗi cập nhật UserAgent cho profile ${profileId}: ${error.message}`);
+      }
+    }
+    if (successCount > 0) {
+      toast.success(`🎉 Đã cập nhật UserAgent cho ${successCount}/${profileIds.length} profiles`);
     }
   };
 
@@ -968,7 +1079,7 @@ const ProfilesPage = () => {
         toast.error(`❌ Lỗi xoá profile ${profileId}: ${error.message}`);
       }
     }
-    
+
     toast.success(`🎉 Đã xoá ${profileIds.length} profiles`);
   };
 
@@ -976,19 +1087,19 @@ const ProfilesPage = () => {
     try {
       const bookmarks = JSON.parse(bookmarkData);
       let successCount = 0;
-      
+
       for (const profileId of profileIds) {
         try {
           const profile = profiles.find(p => p.Id === profileId);
           if (profile) {
             const jsonData = JSON.parse(profile.JsonData || '{}');
             jsonData.bookmarks = bookmarks;
-            
+
             const updateResult = await window.api.invoke("profiles:update", {
               ...profile,
               JsonData: JSON.stringify(jsonData)
             });
-            
+
             if (updateResult === true) {
               successCount++;
             } else {
@@ -999,7 +1110,7 @@ const ProfilesPage = () => {
           toast.error(`❌ Lỗi cập nhật bookmarks cho profile ${profileId}: ${error.message}`);
         }
       }
-      
+
       if (successCount > 0) {
         toast.success(`🎉 Đã cập nhật bookmarks cho ${successCount}/${profileIds.length} profiles`);
       }
@@ -1009,9 +1120,9 @@ const ProfilesPage = () => {
   };
 
   // Check if all current page profiles are selected
-  const isAllSelected = currentPageProfiles.length > 0 && 
+  const isAllSelected = currentPageProfiles.length > 0 &&
     currentPageProfiles.every(profile => selectedProfiles.has(profile.Id));
-  
+
   const isPartiallySelected = currentPageProfiles.some(profile => selectedProfiles.has(profile.Id)) && !isAllSelected;
 
   return (
@@ -1034,9 +1145,9 @@ const ProfilesPage = () => {
                 </Button>
               </div>
             </div>
-            
-            
-            
+
+
+
             {/* Filters */}
             <div className="space-y-4">
               {/* Search and Group Filter */}
@@ -1087,21 +1198,21 @@ const ProfilesPage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Hiển thị:</span>
-                <Select value={String(itemsPerPage)} onValueChange={(value) => setItemsPerPage(Number(value))}>
-                  <SelectTrigger className="w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
-                <span className="text-sm text-muted-foreground">mục mỗi trang</span>
+                  <span className="text-sm text-muted-foreground">Hiển thị:</span>
+                  <Select value={String(itemsPerPage)} onValueChange={(value) => setItemsPerPage(Number(value))}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-sm text-muted-foreground">mục mỗi trang</span>
+                </div>
               </div>
-            </div>
             </div>
             {/* Bulk Actions Bar */}
             {selectedProfiles.size > 0 && (
@@ -1154,6 +1265,15 @@ const ProfilesPage = () => {
                   >
                     <Server className="w-3 h-3 mr-1" />
                     Bookmarks
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleBulkAction('useragent')}
+                    className="text-xs"
+                  >
+                    <Globe className="w-3 h-3 mr-1" />
+                    Update UA
                   </Button>
                   <Button
                     size="sm"
@@ -1263,7 +1383,18 @@ const ProfilesPage = () => {
                             <TableCell>
                               {profile.ProfilePath ? <Server className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
                             </TableCell>
-                            <TableCell><Badge variant="outline">Win</Badge></TableCell>
+                            <TableCell>
+                              {(() => {
+                                try {
+                                  const jsonData = profile.JsonData ? JSON.parse(profile.JsonData) : {};
+                                  const os = jsonData.os || 'win';
+                                  const osLabels: Record<string, string> = { win: '🪟 Win', mac: '🍎 Mac', lin: '🐧 Lin', android: '📱 And' };
+                                  return <Badge variant="outline">{osLabels[os] || 'Win'}</Badge>;
+                                } catch {
+                                  return <Badge variant="outline">Win</Badge>;
+                                }
+                              })()}
+                            </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 {(() => {
@@ -1284,8 +1415,8 @@ const ProfilesPage = () => {
                                   (() => {
                                     try {
                                       const jsonData = JSON.parse(profile.JsonData);
-                                      return jsonData.proxyEnabled ? 
-                                        `${jsonData.proxy.mode.toUpperCase()}|${jsonData.proxy.host}:${jsonData.proxy.port}` : 
+                                      return jsonData.proxyEnabled ?
+                                        `${jsonData.proxy.mode.toUpperCase()}|${jsonData.proxy.host}:${jsonData.proxy.port}` :
                                         <span>Local IP</span>;
                                     } catch {
                                       return <span>Local IP</span>;
@@ -1297,21 +1428,21 @@ const ProfilesPage = () => {
                               </div>
                             </TableCell>
                             <TableCell><div className="flex flex-col">
-                          <span className="text-sm text-muted-foreground">
-                            {formatShortTime(profile.LastRunAt ?? "")}
-                          </span>
-                          {profile.LastRunAt && (
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(profile.LastRunAt).toLocaleString('vi-VN', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </span>
-                          )}
-                        </div></TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {formatShortTime(profile.LastRunAt ?? "")}
+                              </span>
+                              {profile.LastRunAt && (
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(profile.LastRunAt).toLocaleString('vi-VN', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              )}
+                            </div></TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center gap-1">
                                 {(() => {
@@ -1319,7 +1450,7 @@ const ProfilesPage = () => {
                                   const isRunning = status?.status === 'running';
                                   const isStarting = status?.status === 'starting';
                                   const isStopping = status?.status === 'stopping';
-                                  
+
                                   if (isRunning) {
                                     return (
                                       <>
@@ -1372,7 +1503,7 @@ const ProfilesPage = () => {
                                       <Pencil className="mr-2 h-4 w-4" />
                                       Edit
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem 
+                                    <DropdownMenuItem
                                       onClick={() => openAiTaskDialog(profile.Id, profile.Name)}
                                       disabled={browserStatuses[profile.Id]?.status !== 'running'}
                                     >
@@ -1386,6 +1517,15 @@ const ProfilesPage = () => {
                                     <DropdownMenuItem onClick={() => handleExportCookie(profile.Id)}>
                                       <Download className="mr-2 h-4 w-4" />
                                       Export Cookie
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                      setSelectedProfiles(new Set([profile.Id]));
+                                      setBulkAction('useragent');
+                                      setBulkUserAgent('');
+                                      setBulkActionDialogOpen(true);
+                                    }}>
+                                      <Globe className="mr-2 h-4 w-4" />
+                                      Update UserAgent
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={() => handleDelete(profile.Id)}
@@ -1424,14 +1564,14 @@ const ProfilesPage = () => {
                   <div className="text-center py-8 text-muted-foreground">
                     <Server className="mx-auto h-12 w-12 mb-4 opacity-50" />
                     <p>Không tìm thấy profile nào</p>
-                                         {searchQuery || groupFilter !== "all" || createAtOrder !== "default" ? (
-                       <Button onClick={() => {
-                         setSearchQuery("");
-                         setGroupFilter("all");
-                         setCreateAtOrder("default");
-                       }} className="mt-4" variant="outline">
-                         Xóa bộ lọc
-                       </Button>
+                    {searchQuery || groupFilter !== "all" || createAtOrder !== "default" ? (
+                      <Button onClick={() => {
+                        setSearchQuery("");
+                        setGroupFilter("all");
+                        setCreateAtOrder("default");
+                      }} className="mt-4" variant="outline">
+                        Xóa bộ lọc
+                      </Button>
                     ) : (
                       <Button onClick={() => openDialog()} className="mt-4" variant="outline">
                         Tạo profile đầu tiên
@@ -1442,7 +1582,7 @@ const ProfilesPage = () => {
               </>
             )}
           </CardContent>
-          
+
           {/* Fixed Footer with Pagination */}
           {totalPages > 1 && (
             <CardFooter className="border-t bg-background">
@@ -1450,11 +1590,11 @@ const ProfilesPage = () => {
                 <div className="text-xs text-muted-foreground">
                   Hiển thị <strong>{startIndex + 1}</strong> đến <strong>{Math.min(endIndex, totalItems)}</strong> của <strong>{totalItems}</strong> profiles.
                 </div>
-                                 <CustomPagination
-                   currentPage={currentPage}
-                   totalPages={totalPages}
-                   onPageChange={setCurrentPage}
-                 />
+                <CustomPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
               </div>
             </CardFooter>
           )}
@@ -1463,7 +1603,7 @@ const ProfilesPage = () => {
 
       {/* Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]" onEscapeKeyDown={closeDialog}>
+        <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto" onEscapeKeyDown={closeDialog}>
           <form onSubmit={handleSave} key={currentProfile?.Id || 'new'}>
             <DialogHeader>
               <DialogTitle>{currentProfile ? "Chỉnh sửa Profile" : "Tạo Profile mới"}</DialogTitle>
@@ -1471,11 +1611,11 @@ const ProfilesPage = () => {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Tên Profile</Label>
-                <Input 
-                  id="name" 
-                  name="name" 
-                  defaultValue={currentProfile?.Name || ""} 
-                  required 
+                <Input
+                  id="name"
+                  name="name"
+                  defaultValue={currentProfile?.Name || ""}
+                  required
                   maxLength={50}
                   placeholder="Nhập tên profile (chữ, số, khoảng trắng, -, _, .)"
                   className={formErrors.name ? "border-red-500" : ""}
@@ -1486,10 +1626,10 @@ const ProfilesPage = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="group">Nhóm</Label>
-                <Select 
-                  name="group" 
+                <Select
+                  name="group"
                   defaultValue={
-                    currentProfile?.GroupId !== null && currentProfile?.GroupId !== undefined 
+                    currentProfile?.GroupId !== null && currentProfile?.GroupId !== undefined
                       ? String(currentProfile.GroupId)
                       : groups.length > 0 ? String(groups[0].Id) : "1"
                   }
@@ -1523,6 +1663,173 @@ const ProfilesPage = () => {
                 </Select>
               </div>
 
+              {/* OS & Navigator Settings - only for new profiles */}
+              {!currentProfile && (
+                <>
+                  <div className="border-t pt-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="os">Hệ điều hành</Label>
+                        <Select value={profileOs} onValueChange={handleOsChange}>
+                          <SelectTrigger id="os">
+                            <SelectValue placeholder="Chọn OS" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="win">🪟 Windows</SelectItem>
+                            <SelectItem value="mac">🍎 macOS</SelectItem>
+                            <SelectItem value="lin">🐧 Linux</SelectItem>
+                            <SelectItem value="android">📱 Android</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="osSpec">Phiên bản OS</Label>
+                        <Select value={profileOsSpec} onValueChange={setProfileOsSpec}>
+                          <SelectTrigger id="osSpec">
+                            <SelectValue placeholder="Mặc định" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value=" ">Mặc định</SelectItem>
+                            {profileOs === 'win' && (
+                              <SelectItem value="win11">Windows 11</SelectItem>
+                            )}
+                            {profileOs === 'mac' && (
+                              <>
+                                <SelectItem value="M1">Apple M1</SelectItem>
+                                <SelectItem value="M2">Apple M2</SelectItem>
+                                <SelectItem value="M3">Apple M3</SelectItem>
+                                <SelectItem value="M4">Apple M4</SelectItem>
+                              </>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Collapsible Navigator Settings */}
+                  <div className="border rounded-lg">
+                    <button
+                      type="button"
+                      className="flex items-center justify-between w-full p-3 text-sm font-medium text-left hover:bg-muted/50 rounded-lg transition-colors"
+                      onClick={() => setShowNavigatorSettings(!showNavigatorSettings)}
+                    >
+                      <span>⚙️ Cấu hình Navigator nâng cao</span>
+                      {showNavigatorSettings ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                    {showNavigatorSettings && (
+                      <div className="p-3 pt-0 space-y-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="userAgent" className="text-xs">User Agent</Label>
+                          <Input
+                            id="userAgent"
+                            value={navUserAgent}
+                            onChange={(e) => setNavUserAgent(e.target.value)}
+                            placeholder="Để trống để tự động tạo"
+                            className="text-xs"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label htmlFor="resolution" className="text-xs">Độ phân giải</Label>
+                            <Select value={navResolution} onValueChange={setNavResolution}>
+                              <SelectTrigger id="resolution" className="text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1920x1080">1920x1080</SelectItem>
+                                <SelectItem value="1536x864">1536x864</SelectItem>
+                                <SelectItem value="1440x900">1440x900</SelectItem>
+                                <SelectItem value="1366x768">1366x768</SelectItem>
+                                <SelectItem value="1280x720">1280x720</SelectItem>
+                                <SelectItem value="2560x1440">2560x1440</SelectItem>
+                                <SelectItem value="3840x2160">3840x2160</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="language" className="text-xs">Ngôn ngữ</Label>
+                            <Select value={navLanguage} onValueChange={setNavLanguage}>
+                              <SelectTrigger id="language" className="text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="vi-VN">vi-VN</SelectItem>
+                                <SelectItem value="en-US">en-US</SelectItem>
+                                <SelectItem value="en-GB">en-GB</SelectItem>
+                                <SelectItem value="ja-JP">ja-JP</SelectItem>
+                                <SelectItem value="ko-KR">ko-KR</SelectItem>
+                                <SelectItem value="zh-CN">zh-CN</SelectItem>
+                                <SelectItem value="fr-FR">fr-FR</SelectItem>
+                                <SelectItem value="de-DE">de-DE</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="platform" className="text-xs">Platform</Label>
+                          <Input
+                            id="platform"
+                            value={navPlatform}
+                            onChange={(e) => setNavPlatform(e.target.value)}
+                            className="text-xs"
+                          />
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-1">
+                            <Label htmlFor="cores" className="text-xs">CPU Cores</Label>
+                            <Select value={navHardwareConcurrency} onValueChange={setNavHardwareConcurrency}>
+                              <SelectTrigger id="cores" className="text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="2">2</SelectItem>
+                                <SelectItem value="4">4</SelectItem>
+                                <SelectItem value="8">8</SelectItem>
+                                <SelectItem value="12">12</SelectItem>
+                                <SelectItem value="16">16</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="memory" className="text-xs">RAM (GB)</Label>
+                            <Select value={navDeviceMemory} onValueChange={setNavDeviceMemory}>
+                              <SelectTrigger id="memory" className="text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="2">2 GB</SelectItem>
+                                <SelectItem value="4">4 GB</SelectItem>
+                                <SelectItem value="8">8 GB</SelectItem>
+                                <SelectItem value="16">16 GB</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="touch" className="text-xs">Touch Points</Label>
+                            <Select value={navMaxTouchPoints} onValueChange={setNavMaxTouchPoints}>
+                              <SelectTrigger id="touch" className="text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0">0</SelectItem>
+                                <SelectItem value="1">1</SelectItem>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="10">10</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog} disabled={isSaving}>Hủy</Button>
@@ -1551,10 +1858,11 @@ const ProfilesPage = () => {
               {bulkAction === 'extension' && `Cập nhật Extensions (${selectedProfiles.size} profiles)`}
               {bulkAction === 'proxy' && `Gán Proxy (${selectedProfiles.size} profiles)`}
               {bulkAction === 'bookmark' && `Cập nhật Bookmarks (${selectedProfiles.size} profiles)`}
+              {bulkAction === 'useragent' && `Cập nhật UserAgent (${selectedProfiles.size} profiles)`}
               {bulkAction === 'delete' && `Xoá Profiles (${selectedProfiles.size} profiles)`}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="grid gap-4 py-4">
             {bulkAction === 'export' && (
               <div className="text-center">
@@ -1564,7 +1872,7 @@ const ProfilesPage = () => {
                 </p>
               </div>
             )}
-            
+
             {bulkAction === 'group' && (
               <div className="space-y-2">
                 <Label htmlFor="bulkGroup">Chọn nhóm mới</Label>
@@ -1583,7 +1891,7 @@ const ProfilesPage = () => {
                 </Select>
               </div>
             )}
-            
+
             {bulkAction === 'extension' && (
               <div className="space-y-2">
                 <Label htmlFor="bulkExtension">Extensions Data (JSON format)</Label>
@@ -1599,7 +1907,7 @@ const ProfilesPage = () => {
                 </p>
               </div>
             )}
-            
+
             {bulkAction === 'proxy' && (
               <div className="space-y-2">
                 <Label htmlFor="bulkProxy">Chọn proxy</Label>
@@ -1618,7 +1926,7 @@ const ProfilesPage = () => {
                 </Select>
               </div>
             )}
-            
+
             {bulkAction === 'bookmark' && (
               <div className="space-y-2">
                 <Label htmlFor="bulkBookmark">Bookmarks Data (JSON format)</Label>
@@ -1634,7 +1942,23 @@ const ProfilesPage = () => {
                 </p>
               </div>
             )}
-            
+
+            {bulkAction === 'useragent' && (
+              <div className="space-y-2">
+                <Label htmlFor="bulkUserAgent">UserAgent mới</Label>
+                <textarea
+                  id="bulkUserAgent"
+                  value={bulkUserAgent}
+                  onChange={(e) => setBulkUserAgent(e.target.value)}
+                  placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                  className="min-h-[80px] w-full p-3 border rounded-md font-mono text-xs"
+                />
+                <p className="text-xs text-gray-500">
+                  Nhập UserAgent string. Tất cả profiles đã chọn sẽ được cập nhật cùng UserAgent này.
+                </p>
+              </div>
+            )}
+
             {bulkAction === 'delete' && (
               <div className="text-center">
                 <div className="bg-red-50 dark:bg-red-950 p-4 rounded-lg border border-red-200 dark:border-red-800">
@@ -1642,30 +1966,31 @@ const ProfilesPage = () => {
                     ⚠️ Cảnh báo: Hành động không thể hoàn tác!
                   </p>
                   <p className="text-red-600 dark:text-red-400">
-                    Bạn sắp xoá {selectedProfiles.size} profile(s). 
+                    Bạn sắp xoá {selectedProfiles.size} profile(s).
                     Tất cả dữ liệu profile sẽ bị mất vĩnh viễn.
                   </p>
                 </div>
               </div>
             )}
           </div>
-          
+
           <DialogFooter>
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setBulkActionDialogOpen(false)}
               disabled={isProcessingBulk}
             >
               Hủy
             </Button>
-            <Button 
+            <Button
               onClick={executeBulkAction}
               disabled={isProcessingBulk || (
                 (bulkAction === 'group' && !bulkGroupId) ||
                 (bulkAction === 'extension' && !bulkExtensionData.trim()) ||
                 (bulkAction === 'proxy' && !bulkProxyId) ||
-                (bulkAction === 'bookmark' && !bulkBookmarkData.trim())
+                (bulkAction === 'bookmark' && !bulkBookmarkData.trim()) ||
+                (bulkAction === 'useragent' && !bulkUserAgent.trim())
               )}
               variant={bulkAction === 'delete' ? 'destructive' : 'default'}
             >

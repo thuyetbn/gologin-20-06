@@ -441,13 +441,14 @@ export class GoLogin {
     ]);
   }
 
-  async createStartup(local = false, profileData = {} ) {
+  async createStartup(local = false, profileData = {}) {
     const profilePath = join(this.tmpdir, `gologin_profile_${this.profile_id}`);
     // await rimraf(profilePath, () => null);
     // debug('-', profilePath, 'dropped');
     // const profile = await this.getProfile();
-    if (!profile) {
-      throw new Error('Error fetching profile data');
+    const profile = profileData;
+    if (!profile || Object.keys(profile).length === 0) {
+      throw new Error('profile is not defined');
     }
 
     if (!this.executablePath) {
@@ -485,14 +486,14 @@ export class GoLogin {
       height: parseInt(screenHeight, 10),
     };
 
-    this.createCookiesTableQuery = profile.createCookiesTableQuery;
-    if (profile.storageInfo.isNewProfile) {
-      this.isFirstSession = true;
-      await this.createZeroProfile(profile.createCookiesTableQuery);
-    } else {
-      this.isFirstSession = false;
-      await this.downloadProfileAndExtract(profile, local);
-    }
+    // this.createCookiesTableQuery = profile.createCookiesTableQuery;
+    // if (profile.storageInfo.isNewProfile) {
+    //   this.isFirstSession = true;
+    //   await this.createZeroProfile(profile.createCookiesTableQuery);
+    // } else {
+    //   this.isFirstSession = false;
+    //   await this.downloadProfileAndExtract(profile, local);
+    // }
 
     await _promises.rm(join(profilePath, 'Default', 'Sync Data'), { recursive: true }).catch(() => null);
     const pref_file_name = join(profilePath, 'Default', 'Preferences');
@@ -517,7 +518,7 @@ export class GoLogin {
       ExtensionsManagerInst.apiUrl = API_URL;
       await ExtensionsManagerInst.init()
         .then(() => ExtensionsManagerInst.updateExtensions())
-        .catch(() => {});
+        .catch(() => { });
       ExtensionsManagerInst.accessToken = this.access_token;
 
       await ExtensionsManagerInst.getExtensionsPolicies();
@@ -646,17 +647,28 @@ export class GoLogin {
 
     await writeFile(join(profilePath, 'Default', 'Preferences'), JSON.stringify(prefsToWrite));
 
+    // Ensure Default directory exists for bookmarks
+    const defaultDir = join(profilePath, 'Default');
+    await mkdir(defaultDir, { recursive: true }).catch(() => { });
+
     const bookmarksParsedData = await getCurrentProfileBookmarks(this.bookmarksFilePath);
     const bookmarksFromDb = profile.bookmarks?.bookmark_bar;
-    bookmarksParsedData.roots = bookmarksFromDb ? profile.bookmarks : bookmarksParsedData.roots;
-    await writeFile(this.bookmarksFilePath, JSON.stringify(bookmarksParsedData));
+    if (bookmarksFromDb) {
+      bookmarksParsedData.roots = profile.bookmarks;
+    }
+    if (!bookmarksParsedData.roots) {
+      bookmarksParsedData.roots = { bookmark_bar: { children: [] }, other: { children: [] }, synced: { children: [] } };
+    }
+    await writeFile(this.bookmarksFilePath, JSON.stringify(bookmarksParsedData)).catch((e) => {
+      debug('Failed to write bookmarks:', e.message);
+    });
 
     debug('Profile ready. Path: ', profilePath, 'PROXY', JSON.stringify(get(preferences, 'gologin.proxy')));
 
     return profilePath;
   }
 
-  async createStartupCustom(local = false, profileData = {} ) {
+  async createStartupCustom(local = false, profileData = {}) {
     const profilePath = join(this.tmpdir, `gologin_profile_${this.profile_id}`);
     // await rimraf(profilePath, () => null);
     // debug('-', profilePath, 'dropped');
@@ -733,7 +745,7 @@ export class GoLogin {
       ExtensionsManagerInst.apiUrl = API_URL;
       await ExtensionsManagerInst.init()
         .then(() => ExtensionsManagerInst.updateExtensions())
-        .catch(() => {});
+        .catch(() => { });
       ExtensionsManagerInst.accessToken = this.access_token;
 
       await ExtensionsManagerInst.getExtensionsPolicies();
