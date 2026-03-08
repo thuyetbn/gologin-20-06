@@ -279,7 +279,7 @@ export function cleanupEncryptionServiceHandlers(): void {
   ];
 
   handlers.forEach(handler => {
-    ipcMain.removeAllListeners(handler);
+    ipcMain.removeHandler(handler);
   });
 
   console.log('🛑 Encryption Service IPC handlers cleaned up');

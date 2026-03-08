@@ -1,5 +1,5 @@
-"use client";
 
+import { AppUpdater } from "@/components/app-updater";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -131,7 +131,8 @@ const Sidebar = () => {
               <NavItems />
             </nav>
           </div>
-          <div className="mt-auto p-4">
+          <div className="mt-auto p-4 space-y-2">
+            <AppUpdater />
             <ThemeToggle />
           </div>
         </div>
@@ -160,7 +161,8 @@ const Sidebar = () => {
                 <nav className="grid gap-2 text-lg font-medium flex-1">
                   <NavItems mobile />
                 </nav>
-                <div className="mt-auto pt-6">
+                <div className="mt-auto pt-6 space-y-2">
+                  <AppUpdater />
                   <ThemeToggle />
                 </div>
               </div>

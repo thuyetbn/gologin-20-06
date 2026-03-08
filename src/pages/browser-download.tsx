@@ -1,4 +1,3 @@
-"use client";
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -156,7 +155,7 @@ const BrowserDownloadPage: React.FC = () => {
                 variant={downloadProgress.stage === 'completed' ? 'default' : 'destructive'}
                 className="w-full"
               >
-                {downloadProgress.stage === 'completed' ? 'Close' : 'Close'}
+                {'Close'}
               </Button>
             </div>
           )}

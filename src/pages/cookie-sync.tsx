@@ -18,9 +18,9 @@ import {
 } from 'lucide-react';
 
 interface Profile {
-  id: string;
-  name: string;
-  status: string;
+  Id: string;
+  Name: string;
+  Status?: string;
 }
 
 const CookieSyncPage: React.FC = () => {
@@ -40,17 +40,13 @@ const CookieSyncPage: React.FC = () => {
     setError(null);
 
     try {
-      const result = await window.electronAPI.invoke('profiles:getAll');
-      
-      if (result.success) {
-        setProfiles(result.data || []);
-        
-        // Auto-select first profile if available
-        if (result.data && result.data.length > 0) {
-          setSelectedProfile(result.data[0]);
-        }
-      } else {
-        setError(result.error || 'Failed to load profiles');
+      const profiles = await window.api.invoke('profiles:get');
+      const data: Profile[] = Array.isArray(profiles) ? profiles : [];
+      setProfiles(data);
+
+      // Auto-select first profile if available
+      if (data.length > 0) {
+        setSelectedProfile(data[0]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -127,9 +123,9 @@ const CookieSyncPage: React.FC = () => {
               <div className="space-y-2">
                 {profiles.map((profile) => (
                   <div
-                    key={profile.id}
+                    key={profile.Id}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                      selectedProfile?.id === profile.id
+                      selectedProfile?.Id === profile.Id
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:bg-muted/50'
                     }`}
@@ -137,17 +133,19 @@ const CookieSyncPage: React.FC = () => {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium">{profile.name}</div>
+                        <div className="font-medium">{profile.Name}</div>
                         <div className="text-xs text-muted-foreground">
-                          ID: {profile.id}
+                          ID: {profile.Id}
                         </div>
                       </div>
-                      <Badge 
-                        variant={profile.status === 'active' ? 'default' : 'secondary'}
-                        className="text-xs"
-                      >
-                        {profile.status}
-                      </Badge>
+                      {profile.Status && (
+                        <Badge
+                          variant={profile.Status === 'active' ? 'default' : 'secondary'}
+                          className="text-xs"
+                        >
+                          {profile.Status}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -186,9 +184,9 @@ const CookieSyncPage: React.FC = () => {
               <div className="space-y-2">
                 <Label>Selected Profile</Label>
                 <div className="p-2 bg-muted rounded border">
-                  <div className="font-medium">{selectedProfile.name}</div>
+                  <div className="font-medium">{selectedProfile.Name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {selectedProfile.id}
+                    {selectedProfile.Id}
                   </div>
                 </div>
               </div>
@@ -268,7 +266,7 @@ const CookieSyncPage: React.FC = () => {
       {selectedProfile && accessToken && (
         <div className="flex justify-center">
           <CookieSyncPanel
-            profileId={selectedProfile.id}
+            profileId={selectedProfile.Id}
             accessToken={accessToken}
           />
         </div>

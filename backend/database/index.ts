@@ -5,8 +5,13 @@ import store from "../store";
 
 let sequelize: Sequelize | null = null;
 let currentDbPath = "";
+let cachedModels: { Profile: any; Group: any } | null = null;
 
 const initializeModels = (instance: Sequelize) => {
+  if (cachedModels) {
+    return cachedModels;
+  }
+
   const Profile = instance.define(
     "Profiles",
     {
@@ -45,7 +50,8 @@ const initializeModels = (instance: Sequelize) => {
   Group.hasMany(Profile, { foreignKey: 'GroupId' });
   Profile.belongsTo(Group, { foreignKey: 'GroupId' });
 
-  return { Profile, Group };
+  cachedModels = { Profile, Group };
+  return cachedModels;
 };
 
 export const getDatabase = async () => {
@@ -60,6 +66,7 @@ export const getDatabase = async () => {
   // Close existing connection if there is one
   if (sequelize) {
     await sequelize.close();
+    cachedModels = null;
   }
 
   // Create a new connection

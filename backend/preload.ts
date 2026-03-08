@@ -67,6 +67,12 @@ type Channels =
   | "browser-use:run-task"
   | "browser-use:connect"
   | "browser-use:disconnect"
+  // Auto-Updater channels
+  | "updater:check"
+  | "updater:download"
+  | "updater:install"
+  | "updater:get-version"
+  | "updater:status"
   // Keep old ones for now, will be removed later
   | "get-users"
   | "delete-user"

@@ -1,4 +1,3 @@
-"use client";
 
 import { BrowserUseTaskRunner } from "@/components/browser-use";
 import { Badge } from "@/components/ui/badge";

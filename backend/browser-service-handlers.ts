@@ -21,38 +21,8 @@ export function initializeEnhancedBrowserServiceHandlers(): void {
   // Register IPC handlers for browser info and manual operations
   registerIpcHandlers();
 
-  // Background browser check disabled to prevent Chrome auto-restart
-  // startBackgroundBrowserCheck();
-  console.log('⚠️ Background browser check disabled to prevent Chrome auto-launch');
-
   console.log('✅ Browser Auto-Update Service initialized');
 }
-
-/**
- * Start browser check in background without blocking app startup - DISABLED
- */
-/*
-function startBackgroundBrowserCheck(): void {
-  // Run browser check in background after app has loaded and stabilized
-  setImmediate(() => {
-    setTimeout(() => {
-      console.log('🔍 [Background] Starting browser check...');
-      autoCheckAndUpdateBrowser().catch(error => {
-        console.error('🔥 Background browser check failed:', error);
-        // Retry after 30 seconds if failed
-        setTimeout(() => {
-          console.log('🔄 [Background] Retrying browser check...');
-          autoCheckAndUpdateBrowser().catch(retryError => {
-            console.error('🔥 Background browser check retry failed:', retryError);
-          });
-        }, 30000);
-      });
-    }, 15000); // Wait 15 seconds to let app fully load and stabilize
-  });
-  
-  console.log('🚀 Background browser check scheduled (15s delay)');
-}
-*/
 
 /**
  * Register IPC handlers for browser management
@@ -301,82 +271,6 @@ function registerIpcHandlers(): void {
   console.log('✅ Browser Management IPC handlers registered');
 }
 
-  /**
- * Auto check and update browser if newer version available - DISABLED
-   */
-/*
-async function autoCheckAndUpdateBrowser(): Promise<void> {
-  if (!browserService) return;
-
-  try {
-    console.log('🔍 [Background] Checking for browser updates...');
-    
-    // Load saved version info first (fast operation)
-    const savedVersionInfo = await browserService.loadBrowserVersionInfo();
-    let currentMajorVersion = browserService.getMajorVersion(); // fallback
-    let currentVersion = 'Unknown';
-    
-    if (savedVersionInfo) {
-      currentMajorVersion = savedVersionInfo.majorVersion;
-      currentVersion = savedVersionInfo.version;
-      console.log(`📋 [Background] Using saved version info: ${currentVersion} (${currentMajorVersion})`);
-    } else {
-      console.log(`📋 [Background] No saved version info, using fallback: ${currentMajorVersion}`);
-    }
-    
-    // Check if browser exists (fast local check)
-    const browserExists = await browserService.checkBrowserExists(currentMajorVersion);
-    
-    if (!browserExists) {
-      console.log('📦 [Background] Browser not found, downloading latest version silently...');
-      
-      // Download browser silently in background without blocking
-      browserService.downloadBrowserSilently().then(() => {
-        console.log('✅ [Background] Browser downloaded and installed successfully');
-      }).catch(error => {
-        console.error('❌ [Background] Browser download failed:', error);
-      });
-      
-    } else {
-      // Check for updates (potentially slow network call)
-      try {
-        const latestMajorVersion = await browserService.getLatestMajorVersion();
-        const latestVersionInfo = await browserService.getLatestVersionInfoAsync();
-        
-        const hasUpdate = currentMajorVersion !== latestMajorVersion;
-        
-        if (hasUpdate) {
-          console.log(`🆕 [Background] New browser version available! Current: ${currentVersion} (${currentMajorVersion}), Latest: ${latestVersionInfo?.latestVersion} (${latestMajorVersion})`);
-          
-          // Notify frontend about update availability (non-blocking)
-          setImmediate(() => {
-            const { BrowserWindow } = require('electron');
-            const mainWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
-            
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('browser-update-available', {
-                currentVersion,
-                latestVersion: latestVersionInfo?.latestVersion,
-                currentMajorVersion,
-                latestMajorVersion
-              });
-            }
-          });
-        } else {
-          console.log('✅ [Background] Browser is already up to date');
-        }
-      } catch (networkError) {
-        console.warn('⚠️ [Background] Failed to check for updates (network issue):', networkError);
-        // Don't fail the entire process for network issues
-      }
-    }
-    
-  } catch (error) {
-    console.error('❌ [Background] Browser auto-check failed:', error);
-  }
-}
-*/
-
 /**
  * Cleanup Browser Service resources
  */
@@ -394,7 +288,7 @@ export function cleanupEnhancedBrowserServiceHandlers(): void {
   ];
 
   handlers.forEach(handler => {
-    ipcMain.removeAllListeners(handler);
+    ipcMain.removeHandler(handler);
   });
 
   console.log('🛑 Browser Auto-Update Service cleaned up');

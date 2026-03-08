@@ -55,7 +55,7 @@ export const CookieSyncPanel: React.FC<CookieSyncPanelProps> = ({
 
   const loadLocalCookieInfo = async () => {
     try {
-      const result = await window.electronAPI.invoke('cookies:get-local-info', {
+      const result = await window.api.invoke('cookies:get-local-info', {
         profileId,
         accessToken,
         profilePath
@@ -77,7 +77,7 @@ export const CookieSyncPanel: React.FC<CookieSyncPanelProps> = ({
     setLastResult(null);
 
     try {
-      const result = await window.electronAPI.invoke('cookies:upload', {
+      const result = await window.api.invoke('cookies:upload', {
         profileId,
         accessToken,
         profilePath
@@ -110,7 +110,7 @@ export const CookieSyncPanel: React.FC<CookieSyncPanelProps> = ({
     setLastResult(null);
 
     try {
-      const result = await window.electronAPI.invoke('cookies:download', {
+      const result = await window.api.invoke('cookies:download', {
         profileId,
         accessToken,
         profilePath
@@ -139,7 +139,7 @@ export const CookieSyncPanel: React.FC<CookieSyncPanelProps> = ({
     setLastResult(null);
 
     try {
-      const result = await window.electronAPI.invoke('cookies:sync', {
+      const result = await window.api.invoke('cookies:sync', {
         profileId,
         accessToken,
         profilePath

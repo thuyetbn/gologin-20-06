@@ -1,4 +1,3 @@
-"use client";
 
 import ContentLoading from '@/components/content-loading';
 import { useSetupCheck } from '@/hooks/use-setup-check';

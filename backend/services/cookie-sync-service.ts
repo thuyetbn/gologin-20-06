@@ -71,17 +71,17 @@ export class CookieSyncService {
       }
     });
 
-    // Sync cookies (download then upload)
+    // Sync cookies (upload local first, then download from server)
     ipcMain.handle('cookies:sync', async (_event, options: CookieSyncOptions) => {
       try {
-        const downloadResult = await this.downloadCookiesFromServer(options);
         const uploadResult = await this.uploadCookiesToServer(options);
-        
+        const downloadResult = await this.downloadCookiesFromServer(options);
+
         return {
           success: true,
           data: {
-            download: downloadResult,
-            upload: uploadResult
+            upload: uploadResult,
+            download: downloadResult
           }
         };
       } catch (error) {
@@ -268,8 +268,8 @@ export class CookieSyncService {
           cookie.domain, // host_key
           '', // top_frame_site_key
           cookie.name, // name
-          '', // value (empty for encrypted)
-          cookie.value, // encrypted_value
+          cookie.value, // value (plain text)
+          '', // encrypted_value (empty - plain value stored in value column)
           cookie.path, // path
           (cookie.expires || 0) * 1000000, // expires_utc
           cookie.secure ? 1 : 0, // is_secure
