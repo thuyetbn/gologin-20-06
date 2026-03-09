@@ -2,7 +2,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, Download, Folder, Loader2, Monitor, RefreshCw } from 'lucide-react';
+import { CheckCircle, Download, Folder, Loader2, Monitor, RefreshCw, Search } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -19,15 +19,28 @@ interface BrowserInfo {
   executablePath: string;
 }
 
+interface UpdateCheckResult {
+  hasUpdate: boolean;
+  updateInfo?: {
+    currentVersion: string;
+    latestVersion: string;
+    currentMajorVersion: string;
+    latestMajorVersion: string;
+  };
+  message: string;
+}
+
 const BrowserManagement: React.FC = () => {
   const [browserStatus, setBrowserStatus] = useState<BrowserStatus>({
     isInstalled: true,
     lastChecked: new Date().toLocaleString('vi-VN')
   });
-  
+
   const [browserInfo, setBrowserInfo] = useState<BrowserInfo | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [checkResult, setCheckResult] = useState<UpdateCheckResult | null>(null);
 
   // Load browser info
   const loadBrowserInfo = async () => {
@@ -44,6 +57,34 @@ const BrowserManagement: React.FC = () => {
     } catch (error) {
       console.error('Failed to load browser info:', error);
       toast.error("Không thể tải thông tin browser");
+    }
+  };
+
+  // Check for browser updates
+  const handleCheckForUpdates = async () => {
+    setIsChecking(true);
+    setCheckResult(null);
+    try {
+      if (typeof window !== 'undefined' && window.api) {
+        const result = await window.api.invoke('browser:check-for-updates');
+        setCheckResult(result);
+        setBrowserStatus(prev => ({
+          ...prev,
+          lastChecked: new Date().toLocaleString('vi-VN')
+        }));
+        if (result.success && result.hasUpdate) {
+          toast.info(`Có bản cập nhật mới! Version ${result.updateInfo?.latestVersion}`);
+        } else if (result.success && !result.hasUpdate) {
+          toast.success("Browser đang ở phiên bản mới nhất");
+        } else {
+          toast.error(result.message);
+        }
+      }
+    } catch (error) {
+      console.error('Check for updates failed:', error);
+      toast.error("Kiểm tra cập nhật thất bại");
+    } finally {
+      setIsChecking(false);
     }
   };
 
@@ -192,27 +233,68 @@ const BrowserManagement: React.FC = () => {
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-4 items-center">
             <div className="flex-1">
-              <h4 className="font-medium">Cập nhật Browser mới nhất</h4>
+              <h4 className="font-medium">Kiểm tra và cập nhật Browser</h4>
               <p className="text-sm text-muted-foreground">
-                Tự động kiểm tra và cập nhật Orbita Browser khi có phiên bản mới
+                Kiểm tra phiên bản mới nhất và cập nhật Orbita Browser
               </p>
             </div>
-            
-            <Button 
-              onClick={handleUpdateWithProgress}
-              disabled={isUpdating}
-              variant="default"
-              size="lg"
-              className="min-w-[200px]"
-            >
-              {isUpdating ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Download className="h-4 w-4 mr-2" />
-              )}
-              {isUpdating ? 'Đang cập nhật...' : 'Cập nhật Browser'}
-            </Button>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleCheckForUpdates}
+                disabled={isChecking || isUpdating}
+                variant="outline"
+                size="lg"
+              >
+                {isChecking ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Search className="h-4 w-4 mr-2" />
+                )}
+                {isChecking ? 'Đang kiểm tra...' : 'Kiểm tra cập nhật'}
+              </Button>
+
+              <Button
+                onClick={handleUpdateWithProgress}
+                disabled={isUpdating || isChecking}
+                variant="default"
+                size="lg"
+              >
+                {isUpdating ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                {isUpdating ? 'Đang cập nhật...' : 'Cập nhật Browser'}
+              </Button>
+            </div>
           </div>
+
+          {/* Check Result */}
+          {checkResult && (
+            <div className={`p-3 rounded-lg border ${
+              checkResult.hasUpdate
+                ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
+                : 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800'
+            }`}>
+              {checkResult.hasUpdate ? (
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    Có bản cập nhật mới!
+                  </p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Badge variant="outline">{checkResult.updateInfo?.currentVersion}</Badge>
+                    <span className="text-muted-foreground">→</span>
+                    <Badge variant="default">{checkResult.updateInfo?.latestVersion}</Badge>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                  Browser đang ở phiên bản mới nhất
+                </p>
+              )}
+            </div>
+          )}
           
           <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
             <div className="space-y-1">

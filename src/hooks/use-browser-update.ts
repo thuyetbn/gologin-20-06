@@ -15,25 +15,29 @@ export const useBrowserUpdate = () => {
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !window.api) return;
+
     // Listen for browser update notifications from main process
-    if (typeof window !== 'undefined' && window.api) {
-      const handleUpdateAvailable = (_event: unknown, info: UpdateInfo) => {
-        console.log('Browser update available:', info);
-        setHasUpdate(true);
-        setUpdateInfo(info);
-        setShowDialog(true);
+    const handleUpdateAvailable = (_event: unknown, info: UpdateInfo) => {
+      console.log('Browser update available:', info);
+      setHasUpdate(true);
+      setUpdateInfo(info);
+      setShowDialog(true);
 
-        toast.info(`Có bản cập nhật Browser mới! Version ${info.latestVersion} đã có sẵn.`);
-      };
+      toast.info(`Có bản cập nhật Browser mới! Version ${info.latestVersion} đã có sẵn.`);
+    };
 
-      window.api.on('browser-update-available', handleUpdateAvailable);
+    window.api.on('browser-update-available', handleUpdateAvailable);
 
-      return () => {
-        if (window.api.removeListener) {
-          window.api.removeListener('browser-update-available', handleUpdateAvailable);
-        }
-      };
-    }
+    // Auto-check for browser updates on startup (delay 10s)
+    const timer = setTimeout(() => {
+      window.api.invoke('browser:check-for-updates').catch(() => {});
+    }, 10000);
+
+    return () => {
+      clearTimeout(timer);
+      window.api.removeListener('browser-update-available', handleUpdateAvailable);
+    };
   }, []);
 
   const performUpdate = async (): Promise<void> => {
