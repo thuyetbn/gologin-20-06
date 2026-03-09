@@ -26,12 +26,17 @@ interface ThemeProviderProps {
   defaultTheme?: Theme
 }
 
+function getInitialTheme(defaultTheme: Theme): Theme {
+  if (typeof window === "undefined") return defaultTheme
+  const stored = localStorage.getItem("theme") as Theme
+  return stored || defaultTheme
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = React.useState<Theme>(defaultTheme)
+  const [theme, setThemeState] = React.useState<Theme>(() => getInitialTheme(defaultTheme))
 
   React.useEffect(() => {
     const root = window.document.documentElement
@@ -45,34 +50,36 @@ export function ThemeProvider({
         : "light"
 
       root.classList.add(systemTheme)
-      return
+    } else {
+      root.classList.add(theme)
     }
-
-    root.classList.add(theme)
   }, [theme])
 
+  // Listen for system theme changes when theme is "system"
   React.useEffect(() => {
-    const stored = localStorage.getItem("theme") as Theme
-    if (stored) {
-      setTheme(stored)
+    if (theme !== "system") return
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+    const handleChange = () => {
+      const root = window.document.documentElement
+      root.classList.remove("light", "dark")
+      root.classList.add(mediaQuery.matches ? "dark" : "light")
     }
+
+    mediaQuery.addEventListener("change", handleChange)
+    return () => mediaQuery.removeEventListener("change", handleChange)
+  }, [theme])
+
+  const setTheme = React.useCallback((newTheme: Theme) => {
+    localStorage.setItem("theme", newTheme)
+    setThemeState(newTheme)
   }, [])
 
-  React.useEffect(() => {
-    localStorage.setItem("theme", theme)
-  }, [theme])
-
-  const value = {
-    theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem("theme", theme)
-      setTheme(theme)
-    },
-  }
+  const value = { theme, setTheme }
 
   return (
-    <ThemeProviderContext.Provider {...props} value={value}>
+    <ThemeProviderContext.Provider value={value}>
       {children}
     </ThemeProviderContext.Provider>
   )
-} 
+}

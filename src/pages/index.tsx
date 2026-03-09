@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { useCachedData, type Profile } from "@/hooks/use-cached-data";
 import {
   Activity,
   ArrowUpRight,
@@ -18,87 +19,98 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-
-interface DashboardStats {
-  totalProfiles: number;
-  runningProfiles: number;
-  totalGroups: number;
-  totalProxies: number;
-}
+import { useEffect, useMemo, useState } from "react";
 
 export default function Dashboard() {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalProfiles: 0,
-    runningProfiles: 0,
-    totalGroups: 0,
-    totalProxies: 0,
-  });
+  const { profiles, groups, proxies } = useCachedData();
+  const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
 
-  const [recentProfiles, setRecentProfiles] = useState<any[]>([]);
-
+  // Fetch running profiles (not in shared cache since it's volatile)
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchRunning = async () => {
       try {
-        const [profiles, groups, proxies] = await Promise.all([
-          window.api.invoke("profiles:get"),
-          window.api.invoke("groups:get"),
-          window.api.invoke("proxies:get"),
-        ]);
-
-        setStats({
-          totalProfiles: profiles?.length || 0,
-          runningProfiles: 0, // You can add running profiles logic here
-          totalGroups: groups?.length || 0,
-          totalProxies: proxies?.length || 0,
-        });
-
-        // Get recent profiles (last 5)
-        const recent = profiles
-          ?.sort((a: any, b: any) => 
-            new Date(b.CreatedAt || 0).getTime() - new Date(a.CreatedAt || 0).getTime()
-          )
-          .slice(0, 5) || [];
-        setRecentProfiles(recent);
+        if (typeof window === 'undefined' || !window.api) return;
+        const running = await window.api.invoke("profiles:getRunning");
+        const runningSet = new Set<string>(
+          (running || []).map((r: { profileId: string }) => r.profileId)
+        );
+        setRunningIds(runningSet);
       } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
+        console.error("Failed to fetch running profiles:", error);
       }
     };
 
-    fetchDashboardData();
+    fetchRunning();
+
+    // Listen for browser status changes to update running count
+    if (typeof window !== 'undefined' && window.api) {
+      const handleStatusChange = (_event: unknown, data: { profileId: string; status?: { status: string } }) => {
+        setRunningIds(prev => {
+          const next = new Set(prev);
+          if (data.status?.status === 'running') {
+            next.add(data.profileId);
+          } else if (data.status?.status === 'stopped') {
+            next.delete(data.profileId);
+          }
+          return next;
+        });
+      };
+
+      window.api.on('browser-status-changed', handleStatusChange);
+      return () => {
+        window.api.removeListener('browser-status-changed', handleStatusChange);
+      };
+    }
   }, []);
+
+  // Derive stats from cached data
+  const stats = useMemo(() => ({
+    totalProfiles: profiles.length,
+    runningProfiles: runningIds.size,
+    totalGroups: groups.length,
+    totalProxies: proxies.length,
+  }), [profiles.length, groups.length, proxies.length, runningIds.size]);
+
+  // Get recent profiles (last 5)
+  const recentProfiles = useMemo(() => {
+    return [...profiles]
+      .sort((a: Profile, b: Profile) =>
+        new Date(b.CreatedAt || 0).getTime() - new Date(a.CreatedAt || 0).getTime()
+      )
+      .slice(0, 5);
+  }, [profiles]);
 
   const statCards = [
     {
-      title: "Total Profiles",
+      title: "Tổng Profiles",
       value: stats.totalProfiles,
-      description: "Active browser profiles",
+      description: "Browser profiles đã tạo",
       icon: Users,
       href: "/profiles",
       color: "text-blue-600 dark:text-blue-400",
     },
     {
-      title: "Running Profiles", 
+      title: "Đang chạy",
       value: stats.runningProfiles,
-      description: "Currently active",
+      description: "Profiles đang hoạt động",
       icon: Activity,
       href: "/profiles",
       color: "text-green-600 dark:text-green-400",
     },
     {
-      title: "Groups",
+      title: "Nhóm",
       value: stats.totalGroups,
-      description: "Profile groups",
+      description: "Nhóm profiles",
       icon: Server,
       href: "/groups",
       color: "text-purple-600 dark:text-purple-400",
     },
     {
-      title: "Proxies",
+      title: "Proxy",
       value: stats.totalProxies,
-      description: "Proxy connections",
+      description: "Kết nối proxy",
       icon: Globe,
-      href: "/proxies", 
+      href: "/proxies",
       color: "text-orange-600 dark:text-orange-400",
     },
   ];
@@ -106,12 +118,12 @@ export default function Dashboard() {
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-16 md:pt-8">
       <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <h2 className="text-3xl font-bold tracking-tight">Trang chủ</h2>
         <div className="flex items-center space-x-2">
           <Button asChild>
             <Link href="/profiles">
               <Play className="mr-2 h-4 w-4" />
-              Launch Profile
+              Chạy Profile
             </Link>
           </Button>
         </div>
@@ -136,7 +148,7 @@ export default function Dashboard() {
                 </p>
                 <Link href={card.href}>
                   <Button variant="link" className="p-0 h-auto mt-2 text-xs">
-                    View all <ArrowUpRight className="ml-1 h-3 w-3" />
+                    Xem tất cả <ArrowUpRight className="ml-1 h-3 w-3" />
                   </Button>
                 </Link>
               </CardContent>
@@ -149,15 +161,15 @@ export default function Dashboard() {
         {/* Recent Profiles */}
         <Card className="col-span-1 md:col-span-2 lg:col-span-4">
           <CardHeader>
-            <CardTitle>Recent Profiles</CardTitle>
+            <CardTitle>Profiles gần đây</CardTitle>
             <CardDescription>
-              Your latest created browser profiles
+              Các browser profiles được tạo gần nhất
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {recentProfiles.length > 0 ? (
-                recentProfiles.map((profile: any) => (
+                recentProfiles.map((profile: Profile) => (
                   <div
                     key={profile.Id}
                     className="flex items-center justify-between space-x-4"
@@ -171,19 +183,21 @@ export default function Dashboard() {
                           {profile.Name}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Created {new Date(profile.CreatedAt).toLocaleDateString()}
+                          Tạo ngày {new Date(profile.CreatedAt || '').toLocaleDateString('vi-VN')}
                         </p>
                       </div>
                     </div>
-                    <Badge variant="outline">Ready</Badge>
+                    <Badge variant={runningIds.has(profile.Id) ? "default" : "outline"}>
+                      {runningIds.has(profile.Id) ? "Đang chạy" : "Sẵn sàng"}
+                    </Badge>
                   </div>
                 ))
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                  <p>No profiles created yet</p>
+                  <p>Chưa có profile nào</p>
                   <Button asChild className="mt-4" variant="outline">
-                    <Link href="/profiles">Create your first profile</Link>
+                    <Link href="/profiles">Tạo profile đầu tiên</Link>
                   </Button>
                 </div>
               )}
@@ -194,34 +208,34 @@ export default function Dashboard() {
         {/* Quick Actions */}
         <Card className="col-span-1 md:col-span-2 lg:col-span-3">
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+            <CardTitle>Thao tác nhanh</CardTitle>
             <CardDescription>
-              Frequently used features
+              Các tính năng thường dùng
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <Button asChild className="justify-start" variant="outline">
               <Link href="/profiles">
                 <Users className="mr-2 h-4 w-4" />
-                Manage Profiles
+                Quản lý Profiles
               </Link>
             </Button>
             <Button asChild className="justify-start" variant="outline">
               <Link href="/groups">
                 <Server className="mr-2 h-4 w-4" />
-                Organize Groups
+                Quản lý Nhóm
               </Link>
             </Button>
             <Button asChild className="justify-start" variant="outline">
               <Link href="/proxies">
                 <Globe className="mr-2 h-4 w-4" />
-                Setup Proxies
+                Cài đặt Proxy
               </Link>
             </Button>
             <Button asChild className="justify-start" variant="outline">
               <Link href="/settings">
                 <Activity className="mr-2 h-4 w-4" />
-                Settings
+                Cài đặt
               </Link>
             </Button>
           </CardContent>
@@ -231,42 +245,52 @@ export default function Dashboard() {
       {/* Usage Overview */}
       <Card>
         <CardHeader>
-          <CardTitle>System Overview</CardTitle>
+          <CardTitle>Tổng quan hệ thống</CardTitle>
           <CardDescription>
-            Current system status and performance
+            Trạng thái và hiệu suất hiện tại
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span>Profile Usage</span>
+                <span>Profiles đang chạy</span>
                 <span className="font-medium">
                   {stats.runningProfiles}/{stats.totalProfiles}
                 </span>
               </div>
-              <Progress 
-                value={stats.totalProfiles > 0 ? (stats.runningProfiles / stats.totalProfiles) * 100 : 0} 
-                className="h-2" 
+              <Progress
+                value={stats.totalProfiles > 0 ? (stats.runningProfiles / stats.totalProfiles) * 100 : 0}
+                className="h-2"
               />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span>Storage</span>
-                <span className="font-medium text-green-600">Good</span>
+                <span>Proxy đã cấu hình</span>
+                <span className="font-medium">
+                  {stats.totalProxies}
+                </span>
               </div>
-              <Progress value={65} className="h-2" />
+              <Progress
+                value={stats.totalProxies > 0 ? Math.min(100, stats.totalProxies * 10) : 0}
+                className="h-2"
+              />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span>System Health</span>
-                <span className="font-medium text-green-600">Optimal</span>
+                <span>Nhóm đã tạo</span>
+                <span className="font-medium">
+                  {stats.totalGroups}
+                </span>
               </div>
-              <Progress value={85} className="h-2" />
+              <Progress
+                value={stats.totalGroups > 0 ? Math.min(100, stats.totalGroups * 10) : 0}
+                className="h-2"
+              />
             </div>
           </div>
         </CardContent>
       </Card>
     </div>
   );
-} 
+}

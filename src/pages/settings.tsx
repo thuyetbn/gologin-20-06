@@ -77,7 +77,7 @@ const SettingsPage = () => {
         setTokens(fetchedTokens || []);
       } catch (error) {
         console.error("Failed to fetch data:", error);
-        toast.error("Failed to load settings");
+        toast.error("Không thể tải cài đặt");
       }
     };
 
@@ -89,14 +89,14 @@ const SettingsPage = () => {
     try {
       await window.api.invoke("settings:set", settings);
       setIsDirty(false);
-      toast.success("Settings saved successfully!");
+      toast.success("Lưu cài đặt thành công!");
       
       // Refresh page to trigger setup check again
       setTimeout(() => {
         window.location.reload();
       }, 1000);
     } catch (error: any) {
-      toast.error(`Failed to save settings: ${error.message}`);
+      toast.error(`Lưu cài đặt thất bại: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -144,11 +144,11 @@ const SettingsPage = () => {
         }
       }
     } catch (error: any) {
-      toast.error(`Failed to select folder: ${error.message}`);
+      toast.error(`Chọn thư mục thất bại: ${error.message}`);
     }
   };
 
-  const handleSettingChange = (key: keyof Settings, value: any) => {
+  const handleSettingChange = (key: keyof Settings, value: string | boolean | number) => {
     setSettings({ ...settings, [key]: value });
     setIsDirty(true);
   };
@@ -156,7 +156,7 @@ const SettingsPage = () => {
   // Token management functions
   const handleAddToken = async () => {
     if (!newTokenName.trim() || !newTokenValue.trim()) {
-      toast.error("Please enter both name and token");
+      toast.error("Vui lòng nhập tên và token");
       return;
     }
 
@@ -168,9 +168,9 @@ const SettingsPage = () => {
       setTokens(updatedTokens);
       setNewTokenName("");
       setNewTokenValue("");
-      toast.success("Token added successfully!");
+      toast.success("Thêm token thành công!");
     } catch (error: any) {
-      toast.error(`Failed to add token: ${error.message}`);
+      toast.error(`Thêm token thất bại: ${error.message}`);
     }
   };
 
@@ -178,9 +178,9 @@ const SettingsPage = () => {
     try {
       const updatedTokens = await window.api.invoke("tokens:delete", index) as GoLoginToken[];
       setTokens(updatedTokens);
-      toast.success("Token deleted successfully!");
+      toast.success("Xóa token thành công!");
     } catch (error: any) {
-      toast.error(`Failed to delete token: ${error.message}`);
+      toast.error(`Xóa token thất bại: ${error.message}`);
     }
   };
 
@@ -200,7 +200,7 @@ const SettingsPage = () => {
     if (editingIndex === null) return;
     
     if (!editName.trim() || !editToken.trim()) {
-      toast.error("Please enter both name and token");
+      toast.error("Vui lòng nhập tên và token");
       return;
     }
 
@@ -212,9 +212,9 @@ const SettingsPage = () => {
       }) as GoLoginToken[];
       setTokens(updatedTokens);
       cancelEditing();
-      toast.success("Token updated successfully!");
+      toast.success("Cập nhật token thành công!");
     } catch (error: any) {
-      toast.error(`Failed to update token: ${error.message}`);
+      toast.error(`Cập nhật token thất bại: ${error.message}`);
     }
   };
 
@@ -229,10 +229,10 @@ const SettingsPage = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
             <HardDrive className="h-8 w-8" />
-            Settings
+            Cài đặt
           </h1>
           <p className="text-muted-foreground">
-            Configure storage, tokens, and backup settings.
+            Cấu hình lưu trữ, token và sao lưu.
           </p>
         </div>
         <div className="flex gap-2">
@@ -240,12 +240,12 @@ const SettingsPage = () => {
             {isSaving ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Saving...
+                Đang lưu...
               </>
             ) : (
               <>
                 <Save className="mr-2 h-4 w-4" />
-                Save Changes
+                Lưu thay đổi
               </>
             )}
           </Button>
@@ -261,20 +261,20 @@ const SettingsPage = () => {
               GoLogin API Tokens
             </CardTitle>
             <CardDescription>
-              Manage your GoLogin API tokens. Tokens are used for profile creation and management.
+              Quản lý GoLogin API tokens. Token được dùng để tạo và quản lý profile.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Add new token */}
             <div className="flex gap-2">
               <Input
-                placeholder="Token name (e.g., Account 1)"
+                placeholder="Tên token (VD: Tài khoản 1)"
                 value={newTokenName}
                 onChange={(e) => setNewTokenName(e.target.value)}
                 className="w-40"
               />
               <Input
-                placeholder="Paste GoLogin API token here..."
+                placeholder="Dán GoLogin API token tại đây..."
                 value={newTokenValue}
                 onChange={(e) => setNewTokenValue(e.target.value)}
                 className="flex-1"
@@ -289,7 +289,7 @@ const SettingsPage = () => {
             <div className="space-y-2">
               {tokens.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">
-                  No tokens configured. Add a token to start creating profiles.
+                  Chưa có token nào. Thêm token để bắt đầu tạo profile.
                 </div>
               ) : (
                 tokens.map((token, index) => (
@@ -345,7 +345,7 @@ const SettingsPage = () => {
             </div>
 
             <div className="text-sm text-muted-foreground">
-              Get your API token from{" "}
+              Lấy API token tại{" "}
               <a
                 href="https://app.gologin.com/personalArea/TokenApi"
                 target="_blank"
@@ -363,20 +363,20 @@ const SettingsPage = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FolderOpen className="h-5 w-5" />
-              Data Directory
+              Thư mục dữ liệu
             </CardTitle>
             <CardDescription>
-              Set where your profiles and application data are stored.
+              Chọn nơi lưu trữ dữ liệu profiles và ứng dụng.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="dataPath">Data Path</Label>
+              <Label htmlFor="dataPath">Đường dẫn</Label>
               <div className="flex gap-2">
                 <Input
                   id="dataPath"
                   value={settings.dataPath}
-                  placeholder="Select data directory..."
+                  placeholder="Chọn thư mục dữ liệu..."
                   readOnly
                   className="flex-1"
                 />
@@ -385,7 +385,7 @@ const SettingsPage = () => {
                 </Button>
               </div>
               <div className="text-sm text-muted-foreground">
-                This directory will contain all your profile data, settings, and cookies.
+                Thư mục này sẽ chứa tất cả dữ liệu profiles, cài đặt và cookies.
               </div>
             </div>
             
@@ -414,7 +414,7 @@ const SettingsPage = () => {
                   }}
                 >
                   <Database className="h-4 w-4 mr-2" />
-                  Test Database
+                  Kiểm tra Database
                 </Button>
               </div>
             </div>
@@ -426,18 +426,18 @@ const SettingsPage = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Database className="h-5 w-5" />
-              Backup Settings
+              Cài đặt sao lưu
             </CardTitle>
             <CardDescription>
-              Configure automatic backups of your profile data.
+              Cấu hình sao lưu tự động dữ liệu profile.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="backupEnabled">Enable Automatic Backups</Label>
+                <Label htmlFor="backupEnabled">Bật sao lưu tự động</Label>
                 <div className="text-sm text-muted-foreground">
-                  Automatically backup your profile data
+                  Tự động sao lưu dữ liệu profile
                 </div>
               </div>
               <Switch
@@ -449,17 +449,17 @@ const SettingsPage = () => {
 
             {settings.backupEnabled && (
               <div className="space-y-2">
-                <Label htmlFor="backupInterval">Backup Interval (hours)</Label>
+                <Label htmlFor="backupInterval">Khoảng cách sao lưu (giờ)</Label>
                 <Input
                   id="backupInterval"
                   type="number"
                   value={settings.backupInterval}
-                  onChange={(e) => handleSettingChange("backupInterval", parseInt(e.target.value))}
+                  onChange={(e) => handleSettingChange("backupInterval", parseInt(e.target.value) || 1)}
                   min="1"
                   max="168"
                 />
                 <div className="text-sm text-muted-foreground">
-                  How often to create automatic backups (1-168 hours)
+                  Tần suất tạo bản sao lưu tự động (1-168 giờ)
                 </div>
               </div>
             )}

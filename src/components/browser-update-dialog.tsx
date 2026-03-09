@@ -49,8 +49,8 @@ export function BrowserUpdateDialog({
 
   // Listen for progress updates from backend
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).api) {
-      const handleProgress = (event: any, data: { stage: string; progress: number; message: string; error?: string }) => {
+    if (typeof window !== 'undefined' && window.api) {
+      const handleProgress = (_event: unknown, data: { stage: string; progress: number; message: string; error?: string }) => {
         setProgressState({
           stage: data.stage as ProgressState['stage'],
           progress: data.progress || 0,
@@ -59,10 +59,10 @@ export function BrowserUpdateDialog({
         });
       };
 
-      (window as any).api.on('browser-update-progress', handleProgress);
+      window.api.on('browser-update-progress', handleProgress);
 
       return () => {
-        // Note: removeListener not available, will cleanup when component unmounts
+        window.api.removeListener('browser-update-progress', handleProgress);
       };
     }
   }, []);
@@ -81,7 +81,7 @@ export function BrowserUpdateDialog({
         stage: 'error',
         progress: 0,
         message: 'Cập nhật thất bại',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Lỗi không xác định'
       });
     }
   };

@@ -17,45 +17,35 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
-interface UpdateInfo {
-  currentVersion: string;
-  latestVersion: string;
-  currentMajorVersion: string;
-  latestMajorVersion: string;
-}
-
 const Sidebar = () => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [hasUpdate, setHasUpdate] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    // Listen for browser update notifications
-    if (typeof window !== 'undefined' && (window as any).api) {
-      const handleUpdateAvailable = (event: any, info: UpdateInfo) => {
-        if (!mounted) return;
-        
-        setHasUpdate(true);
-        setUpdateInfo(info);
-        console.log('Browser update available:', info);
-      };
+    const handleUpdateAvailable = () => {
+      if (!mounted) return;
+      setHasUpdate(true);
+    };
 
-      (window as any).api.on('browser-update-available', handleUpdateAvailable);
+    // Listen for browser update notifications
+    if (typeof window !== 'undefined' && window.api) {
+      window.api.on('browser-update-available', handleUpdateAvailable);
     }
 
     return () => {
       mounted = false;
-      // Note: removeListener is not reliably available in our API
-      // The listeners will be cleaned up when the component unmounts
+      if (typeof window !== 'undefined' && window.api) {
+        window.api.removeListener('browser-update-available', handleUpdateAvailable);
+      }
     };
   }, []);
 
   const navigation = [
     {
-      name: "Dashboard",
+      name: "Trang chủ",
       href: "/",
       icon: Home,
     },
@@ -65,23 +55,23 @@ const Sidebar = () => {
       icon: Users,
     },
     {
-      name: "Groups",
+      name: "Nhóm",
       href: "/groups",
       icon: Users,
     },
     {
-      name: "Proxies",
+      name: "Proxy",
       href: "/proxies",
       icon: Globe,
     },
     {
-      name: "Browser Management",
+      name: "Quản lý Browser",
       href: "/browser-management",
       icon: Monitor,
       hasNew: hasUpdate,
     },
     {
-      name: "Settings",
+      name: "Cài đặt",
       href: "/settings",
       icon: Settings,
     },
@@ -106,7 +96,7 @@ const Sidebar = () => {
             <span className="flex-1">{item.name}</span>
             {item.hasNew && (
               <Badge variant="destructive" className="h-5 px-1.5 text-xs">
-                NEW
+                MỚI
               </Badge>
             )}
           </Link>
@@ -149,7 +139,7 @@ const Sidebar = () => {
                 className="md:hidden"
               >
                 <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle navigation menu</span>
+                <span className="sr-only">Mở menu</span>
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64">

@@ -20,12 +20,14 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
 
   useEffect(() => {
     let mounted = true;
+    let handleSetupRequired: ((_event: unknown, data: { message: string }) => void) | null = null;
+    let handleSetupError: ((_event: unknown, data: { message: string }) => void) | null = null;
 
     const checkSetup = async () => {
       try {
-        if (typeof window !== 'undefined' && (window as any).api) {
+        if (typeof window !== 'undefined' && window.api) {
           // Get current settings from store
-          const settings = await (window as any).api.invoke('settings:get');
+          const settings = await window.api.invoke('settings:get');
           const dataPath = settings?.dataPath;
 
           console.log('Setup check - dataPath:', dataPath);
@@ -71,7 +73,7 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
             isSetupRequired: true,
             isLoading: false,
             dataPath: null,
-            setupError: 'Failed to check setup status'
+            setupError: 'Không thể kiểm tra trạng thái cài đặt'
           });
 
           // Redirect to settings on error
@@ -86,9 +88,9 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
 
     // Setup event listeners for backend notifications
     const setupEventListeners = () => {
-      if (typeof window !== 'undefined' && (window as any).api) {
+      if (typeof window !== 'undefined' && window.api) {
         // Listen for setup-required events from backend
-        (window as any).api.on('setup-required', (event: any, data: any) => {
+        handleSetupRequired = (_event: unknown, data: { message: string }) => {
           console.log('Backend setup-required event:', data);
           if (mounted) {
             setSetupState(prev => ({
@@ -103,22 +105,22 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
               setTimeout(() => {
                 router.replace('/settings?setup=required');
               }, 100);
-              toast.warning('Setup required: ' + data.message);
+              toast.warning('Yêu cầu cài đặt: ' + data.message);
             }
           }
-        });
+        };
 
-        // Listen for setup-error events from backend  
-        (window as any).api.on('setup-error', (event: any, data: any) => {
+        // Listen for setup-error events from backend
+        handleSetupError = (_event: unknown, data: { message: string }) => {
           console.error('Backend setup-error event:', data);
-          toast.error('Setup Error: ' + data.message);
-          
+          toast.error('Lỗi cài đặt: ' + data.message);
+
           if (mounted) {
             setSetupState(prev => ({
               ...prev,
               isSetupRequired: true,
               isLoading: false,
-              setupError: 'Setup Error: ' + data.message
+              setupError: 'Lỗi cài đặt: ' + data.message
             }));
 
             // Redirect to settings on error
@@ -128,7 +130,10 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
               }, 100);
             }
           }
-        });
+        };
+
+        window.api.on('setup-required', handleSetupRequired);
+        window.api.on('setup-error', handleSetupError);
       }
     };
 
@@ -139,8 +144,14 @@ export const useSetupCheck = (skipRedirect?: boolean) => {
     // Cleanup function
     return () => {
       mounted = false;
-      // Note: removeAllListeners is not available in our API
-      // The listeners will be cleaned up when the component unmounts
+      if (typeof window !== 'undefined' && window.api) {
+        if (handleSetupRequired) {
+          window.api.removeListener('setup-required', handleSetupRequired);
+        }
+        if (handleSetupError) {
+          window.api.removeListener('setup-error', handleSetupError);
+        }
+      }
     };
   }, [router, skipRedirect]);
 

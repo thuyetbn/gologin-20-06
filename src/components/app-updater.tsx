@@ -30,15 +30,15 @@ export function AppUpdater() {
   const [currentVersion, setCurrentVersion] = useState<string>("");
 
   useEffect(() => {
-    if (typeof window === "undefined" || !(window as any).api) return;
+    if (typeof window === "undefined" || !window.api) return;
 
     // Get current version
-    (window as any).api.invoke("updater:get-version").then((v: string) => {
+    window.api.invoke("updater:get-version").then((v: string) => {
       setCurrentVersion(v);
     }).catch(() => {});
 
     // Listen for updater status events
-    const handleStatus = (_event: any, data: UpdaterStatus) => {
+    const handleStatus = (_event: unknown, data: UpdaterStatus) => {
       setStatus(data);
 
       if (data.status === "available") {
@@ -46,21 +46,24 @@ export function AppUpdater() {
       }
     };
 
-    (window as any).api.on("updater:status", handleStatus);
+    window.api.on("updater:status", handleStatus);
 
     // Auto-check on startup (delay 5s to let app settle)
     const timer = setTimeout(() => {
-      (window as any).api.invoke("updater:check").catch(() => {});
+      window.api.invoke("updater:check").catch(() => {});
     }, 5000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      window.api.removeListener("updater:status", handleStatus);
+    };
   }, []);
 
   const checkForUpdates = useCallback(async () => {
-    if (!(window as any).api) return;
+    if (!window.api) return;
     setStatus({ status: "checking" });
     try {
-      const result = await (window as any).api.invoke("updater:check");
+      const result = await window.api.invoke("updater:check");
       if (result.success && !result.hasUpdate) {
         setStatus({ status: "up-to-date", version: result.version });
         setDialogOpen(true);
@@ -71,17 +74,17 @@ export function AppUpdater() {
   }, []);
 
   const downloadUpdate = useCallback(async () => {
-    if (!(window as any).api) return;
+    if (!window.api) return;
     try {
-      await (window as any).api.invoke("updater:download");
+      await window.api.invoke("updater:download");
     } catch {
       setStatus({ status: "error", error: "Tải xuống thất bại" });
     }
   }, []);
 
   const installUpdate = useCallback(() => {
-    if (!(window as any).api) return;
-    (window as any).api.invoke("updater:install");
+    if (!window.api) return;
+    window.api.invoke("updater:install");
   }, []);
 
   const formatBytes = (bytes: number) => {

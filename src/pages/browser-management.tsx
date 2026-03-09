@@ -2,13 +2,12 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, Download, Folder, Loader2, Monitor, RefreshCw } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 interface BrowserStatus {
   isInstalled: boolean;
-  autoUpdateEnabled: boolean;
   lastChecked: string;
 }
 
@@ -21,10 +20,8 @@ interface BrowserInfo {
 }
 
 const BrowserManagement: React.FC = () => {
-  const { toast } = useToast();
   const [browserStatus, setBrowserStatus] = useState<BrowserStatus>({
     isInstalled: true,
-    autoUpdateEnabled: true,
     lastChecked: new Date().toLocaleString('vi-VN')
   });
   
@@ -35,8 +32,8 @@ const BrowserManagement: React.FC = () => {
   // Load browser info
   const loadBrowserInfo = async () => {
     try {
-      if (typeof window !== 'undefined' && (window as any).api) {
-        const info = await (window as any).api.invoke('browser:get-info');
+      if (typeof window !== 'undefined' && window.api) {
+        const info = await window.api.invoke('browser:get-info');
         setBrowserInfo(info);
         setBrowserStatus(prev => ({
           ...prev,
@@ -46,11 +43,7 @@ const BrowserManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load browser info:', error);
-      toast({
-        title: "Lỗi",
-        description: "Không thể tải thông tin browser",
-        variant: "destructive"
-      });
+      toast.error("Không thể tải thông tin browser");
     }
   };
 
@@ -58,33 +51,21 @@ const BrowserManagement: React.FC = () => {
   const handleUpdateWithProgress = async () => {
     setIsUpdating(true);
     try {
-      if (typeof window !== 'undefined' && (window as any).api) {
-        const result = await (window as any).api.invoke('browser:update-with-progress');
+      if (typeof window !== 'undefined' && window.api) {
+        const result = await window.api.invoke('browser:update-with-progress');
         
         if (result.success) {
-          toast({
-            title: "Cập nhật thành công!", 
-            description: `Browser đã được cập nhật lên version ${result.newVersion}`,
-            variant: "default"
-          });
+          toast.success(`Browser đã được cập nhật lên version ${result.newVersion}`);
           
           // Refresh browser info after update
           await loadBrowserInfo();
         } else {
-          toast({
-            title: "Lỗi cập nhật",
-            description: result.message,
-            variant: "destructive"
-          });
+          toast.error(result.message);
         }
       }
     } catch (error) {
       console.error('Update with progress failed:', error);
-      toast({
-        title: "Lỗi",
-        description: "Cập nhật thất bại. Vui lòng thử lại.",
-        variant: "destructive"
-      });
+      toast.error("Cập nhật thất bại. Vui lòng thử lại.");
     } finally {
       setIsUpdating(false);
     }
@@ -99,8 +80,8 @@ const BrowserManagement: React.FC = () => {
 
   // Open storage folder
   const openStorageFolder = () => {
-    if (browserInfo?.storagePath && typeof window !== 'undefined' && (window as any).api) {
-      (window as any).api.invoke('shell:open-path', browserInfo.storagePath);
+    if (browserInfo?.storagePath && typeof window !== 'undefined' && window.api) {
+      window.api.invoke('shell:open-path', browserInfo.storagePath);
     }
   };
 
@@ -123,7 +104,7 @@ const BrowserManagement: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Browser Management</h1>
+          <h1 className="text-3xl font-bold">Quản Lý Browser</h1>
           <p className="text-muted-foreground mt-2">Quản lý và cập nhật Orbita Browser</p>
         </div>
         <Button 
@@ -160,19 +141,19 @@ const BrowserManagement: React.FC = () => {
             
             <div className="flex flex-col space-y-2">
               <span className="text-sm text-muted-foreground">Version hiện tại</span>
-              <span className="text-sm font-mono">{browserInfo?.version || 'Unknown'}</span>
+              <span className="text-sm font-mono">{browserInfo?.version || 'Không xác định'}</span>
             </div>
             
             <div className="flex flex-col space-y-2">
               <span className="text-sm text-muted-foreground">Major Version</span>
-              <span className="text-sm font-mono">{browserInfo?.majorVersion || 'Unknown'}</span>
+              <span className="text-sm font-mono">{browserInfo?.majorVersion || 'Không xác định'}</span>
             </div>
             
             <div className="flex flex-col space-y-2">
               <span className="text-sm text-muted-foreground">Thư mục lưu trữ</span>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono truncate flex-1" title={browserInfo?.storagePath}>
-                  {browserInfo?.storagePath || 'Unknown'}
+                  {browserInfo?.storagePath || 'Không xác định'}
                 </span>
                 <Button 
                   onClick={openStorageFolder}
@@ -188,7 +169,7 @@ const BrowserManagement: React.FC = () => {
             <div className="flex flex-col space-y-2">
               <span className="text-sm text-muted-foreground">Đường dẫn thực thi</span>
               <span className="text-xs font-mono truncate" title={browserInfo?.executablePath}>
-                {browserInfo?.executablePath || 'Unknown'}
+                {browserInfo?.executablePath || 'Không xác định'}
               </span>
             </div>
             
@@ -219,7 +200,7 @@ const BrowserManagement: React.FC = () => {
             
             <Button 
               onClick={handleUpdateWithProgress}
-              disabled={isUpdating || !browserInfo?.isInstalled}
+              disabled={isUpdating}
               variant="default"
               size="lg"
               className="min-w-[200px]"
@@ -254,13 +235,6 @@ const BrowserManagement: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col space-y-2">
-              <span className="text-sm text-muted-foreground">Tự động cập nhật</span>
-              <Badge variant={browserStatus.autoUpdateEnabled ? "default" : "secondary"}>
-                {browserStatus.autoUpdateEnabled ? "Đã bật" : "Đã tắt"}
-              </Badge>
-            </div>
-            
             <div className="flex flex-col space-y-2">
               <span className="text-sm text-muted-foreground">Trạng thái hoạt động</span>
               <Badge variant="default">

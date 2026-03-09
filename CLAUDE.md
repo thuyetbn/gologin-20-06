@@ -32,7 +32,7 @@ yarn electron-rebuild   # Rebuild native modules (sqlite3) cho Electron
 - **`backend/enhanced-browser-service.ts`** - Service chính để launch/stop browser profiles, quản lý Orbita browser instances
 - **`backend/browser-service.ts`** - Browser download, health check, backup management
 - **`backend/browser-service-handlers.ts`** - IPC handler wrappers cho browser service
-- **`backend/handlers/`** - IPC handlers tách riêng (cookie-handlers, browser-use-handlers)
+- **`backend/handlers/`** - IPC handlers tách riêng (cookie-handlers)
 - **`backend/gologin/`** - GoLogin core logic (JavaScript thuần, không phải TypeScript):
   - `gologin.js` - GoLogin class chính, quản lý profile lifecycle, proxy, fingerprint
   - `browser/` - Browser checker, download manager, user data manager
@@ -41,8 +41,7 @@ yarn electron-rebuild   # Rebuild native modules (sqlite3) cho Electron
   - `profile/` - Profile archiver, directories cleanup
   - `utils/http.js` - HTTP wrapper dùng `requestretry`
 - **`backend/database/`** - SQLite database layer dùng Sequelize ORM
-- **`backend/services/`** - Token service, browser-use service, etc.
-- **`backend/python-service/`** - Tích hợp Python/browser-use cho AI automation
+- **`backend/services/`** - Token service, etc.
 
 ### Renderer Process (src/)
 - Next.js 15 với **Pages Router** (không phải App Router), export static (`output: "export"`)
@@ -66,7 +65,6 @@ Frontend giao tiếp với backend qua IPC channels được định nghĩa tron
 - `tokens:get`, `tokens:add`, `tokens:update`, `tokens:delete`
 - `groups:get`, `groups:create`, `groups:update`, `groups:delete`
 - `browser:get-info`, `browser:update-with-progress`
-- `browser-use:start`, `browser-use:stop`, `browser-use:run-task`
 - `credentials:store`, `credentials:get`, `credentials:list`
 
 Frontend gọi IPC qua `window.api.invoke(channel, args)` (async) hoặc `window.api.send(channel, args)`.

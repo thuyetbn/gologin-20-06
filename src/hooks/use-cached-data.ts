@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+import React from "react";
 
 // Define types based on how they're used in the pages
 export interface Profile {
@@ -13,7 +14,6 @@ export interface Profile {
   Notes?: string;
   Proxy?: string;
   Status?: "running" | "stopped" | "error";
-  [key: string]: any;
 }
 
 export interface Group {
@@ -22,7 +22,7 @@ export interface Group {
   Description?: string;
   Color?: string;
   CreatedAt?: string;
-  [key: string]: any;
+  ProfileCount?: number;
 }
 
 export interface Proxy {
@@ -51,13 +51,15 @@ export interface CachedData {
   removeLocalGroup: (id: number) => void;
 }
 
-export const useCachedData = (): CachedData => {
+const CachedDataContext = createContext<CachedData | null>(null);
+
+export function CachedDataProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [fetchedProfiles, fetchedGroups, fetchedProxies] = await Promise.all([
@@ -77,44 +79,44 @@ export const useCachedData = (): CachedData => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const refreshCache = async () => {
+  const refreshCache = useCallback(async () => {
     await fetchData();
-  };
+  }, [fetchData]);
 
   // Profile local update functions
-  const updateLocalProfile = (updatedProfile: Profile) => {
+  const updateLocalProfile = useCallback((updatedProfile: Profile) => {
     setProfiles(prev => prev.map(p => p.Id === updatedProfile.Id ? updatedProfile : p));
-  };
+  }, []);
 
-  const addLocalProfile = (newProfile: Profile) => {
+  const addLocalProfile = useCallback((newProfile: Profile) => {
     setProfiles(prev => [...prev, newProfile]);
-  };
+  }, []);
 
-  const removeLocalProfile = (id: string) => {
+  const removeLocalProfile = useCallback((id: string) => {
     setProfiles(prev => prev.filter(p => p.Id !== id));
-  };
+  }, []);
 
   // Group local update functions
-  const updateLocalGroup = (updatedGroup: Group) => {
+  const updateLocalGroup = useCallback((updatedGroup: Group) => {
     setGroups(prev => prev.map(g => g.Id === updatedGroup.Id ? updatedGroup : g));
-  };
+  }, []);
 
-  const addLocalGroup = (newGroup: Group) => {
+  const addLocalGroup = useCallback((newGroup: Group) => {
     setGroups(prev => [...prev, newGroup]);
-  };
+  }, []);
 
-  const removeLocalGroup = (id: number) => {
+  const removeLocalGroup = useCallback((id: number) => {
     setGroups(prev => prev.filter(g => g.Id !== id));
-  };
+  }, []);
 
   // Initial data fetch
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  return {
+  const value: CachedData = {
     profiles,
     groups,
     proxies,
@@ -127,4 +129,14 @@ export const useCachedData = (): CachedData => {
     addLocalGroup,
     removeLocalGroup
   };
-}; 
+
+  return React.createElement(CachedDataContext.Provider, { value }, children);
+}
+
+export const useCachedData = (): CachedData => {
+  const context = useContext(CachedDataContext);
+  if (!context) {
+    throw new Error("useCachedData must be used within a CachedDataProvider");
+  }
+  return context;
+};

@@ -6,6 +6,8 @@ import store from "../store";
 let sequelize: Sequelize | null = null;
 let currentDbPath = "";
 let cachedModels: { Profile: any; Group: any } | null = null;
+let isFirstInit = true;
+let initPromise: Promise<any> | null = null;
 
 const initializeModels = (instance: Sequelize) => {
   if (cachedModels) {
@@ -59,29 +61,67 @@ export const getDatabase = async () => {
   const newDbPath = join(storedDataPath, "profile_data.db");
 
   if (sequelize && currentDbPath === newDbPath) {
-    // Return existing connection if path hasn't changed
     return { sequelize, profilesPath: storedDataPath, ...initializeModels(sequelize) };
   }
 
-  // Close existing connection if there is one
-  if (sequelize) {
-    await sequelize.close();
-    cachedModels = null;
+  // Mutex: reuse in-flight init promise to prevent concurrent connections
+  if (initPromise) {
+    return initPromise;
   }
 
-  // Create a new connection
-  sequelize = new Sequelize({
-    dialect: "sqlite",
-    storage: newDbPath,
-    logging: false,
-  });
+  initPromise = (async () => {
+    try {
+      // Close existing connection if there is one
+      if (sequelize) {
+        try {
+          await sequelize.close();
+        } catch (e) {
+          console.error("Error closing database:", e);
+        }
+        cachedModels = null;
+      }
 
-  currentDbPath = newDbPath;
+      // Create a new connection
+      sequelize = new Sequelize({
+        dialect: "sqlite",
+        storage: newDbPath,
+        logging: false,
+      });
 
-  // Sync database schema
-  await sequelize.sync({ alter: true });
+      currentDbPath = newDbPath;
 
-  console.log("Database connection re-established/updated at:", newDbPath);
-  
-  return { sequelize, profilesPath: storedDataPath, ...initializeModels(sequelize) };
+      // Enable WAL mode for better concurrent read performance
+      await sequelize.query("PRAGMA journal_mode=WAL;");
+
+      // Only use alter on first init to create missing columns, then use sync without alter
+      if (isFirstInit) {
+        await sequelize.sync({ alter: true });
+        isFirstInit = false;
+      } else {
+        await sequelize.sync();
+      }
+
+      console.log("Database connection established at:", newDbPath);
+
+      return { sequelize, profilesPath: storedDataPath, ...initializeModels(sequelize) };
+    } finally {
+      initPromise = null;
+    }
+  })();
+
+  return initPromise;
+};
+
+export const closeDatabase = async () => {
+  if (sequelize) {
+    try {
+      await sequelize.close();
+      console.log("Database connection closed");
+    } catch (e) {
+      console.error("Error closing database:", e);
+    }
+    sequelize = null;
+    cachedModels = null;
+    currentDbPath = "";
+  }
 };

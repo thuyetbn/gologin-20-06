@@ -12,7 +12,7 @@ interface ContentLoadingProps {
 const ContentLoading = ({ 
   type = 'page', 
   rows = 5, 
-  message = "Loading content..." 
+  message = "Đang tải nội dung..." 
 }: ContentLoadingProps) => {
   
   if (type === 'page') {
@@ -24,7 +24,7 @@ const ContentLoading = ({
         </div>
         <div className="text-center space-y-2">
           <p className="text-lg font-medium">{message}</p>
-          <p className="text-sm text-muted-foreground">Please wait while we load your data...</p>
+          <p className="text-sm text-muted-foreground">Vui lòng đợi trong khi tải dữ liệu...</p>
         </div>
       </div>
     );

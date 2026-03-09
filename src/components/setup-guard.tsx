@@ -15,7 +15,7 @@ const SetupGuard = ({ children, requireSetup = true }: SetupGuardProps) => {
 
   // Show loading while checking setup
   if (isLoading) {
-    return <ContentLoading type="page" message="Checking setup..." />;
+    return <ContentLoading type="page" message="Đang kiểm tra cài đặt..." />;
   }
 
   // If setup is required, let useSetupCheck handle the redirect
@@ -27,7 +27,7 @@ const SetupGuard = ({ children, requireSetup = true }: SetupGuardProps) => {
 
   // If setup is required but we're not on settings page, show brief loading while redirect happens
   if (requireSetup && isSetupRequired) {
-    return <ContentLoading type="page" message="Redirecting to setup..." />;
+    return <ContentLoading type="page" message="Đang chuyển đến trang cài đặt..." />;
   }
 
   // Setup completed or not required, render children

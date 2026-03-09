@@ -1,12 +1,57 @@
-import { app, dialog, ipcMain, shell } from "electron";
+import { app, dialog, ipcMain, safeStorage, shell } from "electron";
 import path from "node:path";
 import console from "node:console";
 import { getDatabase } from "../database/index.js";
 import { Settings } from "../interfaces/index.js";
 import { tokenService } from "../services/token-service.js";
 import store from "../store.js";
+import {
+  validate,
+  proxiesSetSchema,
+  groupCreateSchema,
+  groupUpdateSchema,
+  groupDeleteSchema,
+  tokenAddSchema,
+  tokenUpdateSchema,
+  tokenDeleteSchema,
+  settingsSetSchema,
+  shellOpenPathSchema,
+  dataSetupSchema,
+} from "../utils/validation.js";
 
 const fs = require('fs').promises;
+
+/**
+ * Encrypt a proxy password using OS-level safeStorage.
+ * Falls back to plaintext if safeStorage is unavailable.
+ */
+function encryptPassword(password: string): string {
+  if (!password) return '';
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(password);
+      return 'enc:' + encrypted.toString('base64');
+    }
+  } catch {}
+  return password;
+}
+
+/**
+ * Decrypt a proxy password. Handles both encrypted (enc: prefix) and legacy plaintext.
+ */
+function decryptPassword(stored: string): string {
+  if (!stored) return '';
+  if (stored.startsWith('enc:')) {
+    try {
+      const buffer = Buffer.from(stored.slice(4), 'base64');
+      return safeStorage.decryptString(buffer);
+    } catch {
+      return '';
+    }
+  }
+  // Legacy plaintext — return as-is
+  return stored;
+}
 
 /**
  * Register all general-purpose IPC handlers:
@@ -16,11 +61,22 @@ export function initializeGeneralHandlers(): void {
   // ── Proxies ──
   ipcMain.handle("proxies:get", async () => {
     console.log('🔄 [Store] Loading proxies data');
-    return store.get("proxies", []);
+    const proxies = store.get("proxies", []) as any[];
+    // Decrypt passwords before sending to renderer
+    return proxies.map((p: any) => ({
+      ...p,
+      password: decryptPassword(p.password || ''),
+    }));
   });
 
   ipcMain.handle("proxies:set", async (_event, proxies) => {
-    store.set("proxies", proxies);
+    const validated = await validate(proxiesSetSchema, proxies);
+    // Encrypt passwords before storing
+    const encrypted = (validated as any[]).map((p: any) => ({
+      ...p,
+      password: encryptPassword(p.password || ''),
+    }));
+    store.set("proxies", encrypted);
     return true;
   });
 
@@ -37,14 +93,11 @@ export function initializeGeneralHandlers(): void {
   });
 
   ipcMain.handle("groups:create", async (_event, groupData) => {
+    const validated = await validate(groupCreateSchema, groupData);
     const { Group } = await getDatabase();
 
-    if (groupData.Name && groupData.Name.length > 30) {
-      throw new Error("Group name must be 30 characters or less.");
-    }
-
     try {
-      const group = await Group.create(groupData);
+      const group = await Group.create(validated);
       const result = group.toJSON();
       return result.Id;
     } catch (error: any) {
@@ -54,12 +107,9 @@ export function initializeGeneralHandlers(): void {
   });
 
   ipcMain.handle("groups:update", async (_event, groupData) => {
+    const validated = await validate(groupUpdateSchema, groupData);
     const { Group } = await getDatabase();
-    const { Id, ...data } = groupData;
-
-    if (data.Name && data.Name.length > 30) {
-      throw new Error("Group name must be 30 characters or less.");
-    }
+    const { Id, ...data } = validated;
 
     try {
       const result = await Group.update(data, { where: { Id } });
@@ -76,18 +126,19 @@ export function initializeGeneralHandlers(): void {
   });
 
   ipcMain.handle("groups:delete", async (_event, groupId) => {
+    const validatedId = await validate(groupDeleteSchema, groupId);
     const { Group } = await getDatabase();
 
     try {
-      const result = await Group.destroy({ where: { Id: groupId } });
+      const result = await Group.destroy({ where: { Id: validatedId } });
       if (result > 0) {
         return true;
       } else {
-        console.warn(`Group deletion failed: No rows affected for group ${groupId}`);
+        console.warn(`Group deletion failed: No rows affected for group ${validatedId}`);
         return false;
       }
     } catch (error: any) {
-      console.error(`Error deleting group ${groupId}:`, error);
+      console.error(`Error deleting group ${validatedId}:`, error);
       throw error;
     }
   });
@@ -97,16 +148,19 @@ export function initializeGeneralHandlers(): void {
     return await tokenService.getTokens();
   });
 
-  ipcMain.handle("tokens:add", async (_event, { name, token }: { name: string; token: string }) => {
+  ipcMain.handle("tokens:add", async (_event, data) => {
+    const { name, token } = await validate(tokenAddSchema, data);
     return await tokenService.addToken(name, token);
   });
 
-  ipcMain.handle("tokens:update", async (_event, { index, name, token }: { index: number; name: string; token: string }) => {
+  ipcMain.handle("tokens:update", async (_event, data) => {
+    const { index, name, token } = await validate(tokenUpdateSchema, data);
     return await tokenService.updateToken(index, name, token);
   });
 
-  ipcMain.handle("tokens:delete", async (_event, index: number) => {
-    return await tokenService.deleteToken(index);
+  ipcMain.handle("tokens:delete", async (_event, index) => {
+    const validatedIndex = await validate(tokenDeleteSchema, index);
+    return await tokenService.deleteToken(validatedIndex);
   });
 
   ipcMain.handle("tokens:reload", async () => {
@@ -119,14 +173,29 @@ export function initializeGeneralHandlers(): void {
     return store.get();
   });
 
-  ipcMain.handle("settings:set", async (_event, settings: Settings) => {
-    store.set(settings);
+  ipcMain.handle("settings:set", async (_event, settings) => {
+    const validated = await validate(settingsSetSchema, settings);
+    store.set(validated as Settings);
     return true;
   });
 
   // ── Dialog ──
   ipcMain.handle("dialog:open", async (_event, options) => {
-    const { canceled, filePaths } = await dialog.showOpenDialog(options);
+    // Sanitize options - only allow safe dialog properties
+    const safeOptions: Electron.OpenDialogOptions = {};
+    if (options?.title && typeof options.title === 'string') safeOptions.title = options.title;
+    if (options?.defaultPath && typeof options.defaultPath === 'string') safeOptions.defaultPath = options.defaultPath;
+    if (Array.isArray(options?.properties)) {
+      const allowedProps = ['openFile', 'openDirectory', 'multiSelections', 'showHiddenFiles'];
+      safeOptions.properties = options.properties.filter((p: string) => allowedProps.includes(p)) as Electron.OpenDialogOptions['properties'];
+    }
+    if (Array.isArray(options?.filters)) {
+      safeOptions.filters = options.filters.filter((f: { name?: unknown; extensions?: unknown }) =>
+        f && typeof f.name === 'string' && Array.isArray(f.extensions)
+      );
+    }
+
+    const { canceled, filePaths } = await dialog.showOpenDialog(safeOptions);
     if (canceled) {
       return null;
     } else {
@@ -143,9 +212,10 @@ export function initializeGeneralHandlers(): void {
   });
 
   // ── Data Setup ──
-  ipcMain.handle('data:setupDatabase', async (_event, dataPath: string) => {
+  ipcMain.handle('data:setupDatabase', async (_event, dataPath) => {
+    const validatedPath = await validate(dataSetupSchema, dataPath);
     try {
-      const normalizedDataPath = dataPath;
+      const normalizedDataPath = validatedPath;
       const targetDbPath = path.join(normalizedDataPath, 'profile_data.db');
       const sourceDbPath = path.join(__dirname, '..', '..', 'backend', 'database', 'profile_data.db');
 
@@ -231,9 +301,10 @@ export function initializeGeneralHandlers(): void {
   });
 
   // ── Shell ──
-  ipcMain.handle('shell:open-path', async (_event, shellPath: string) => {
+  ipcMain.handle('shell:open-path', async (_event, shellPath) => {
+    const validatedPath = await validate(shellOpenPathSchema, shellPath);
     try {
-      await shell.openPath(shellPath);
+      await shell.openPath(validatedPath);
       return { success: true };
     } catch (error) {
       console.error('Failed to open path:', error);

@@ -524,7 +524,10 @@ export class EnhancedBrowserService {
       // Remove existing browser
       await this.browserChecker.deleteDir(join(browserDir, targetDir));
 
-      // Extract backup
+      // Extract backup — validate path is within backup directory
+      if (!backup.path.startsWith(this.backupDir)) {
+        throw new Error('Invalid backup path');
+      }
       await execAsync(`tar -xzf "${backup.path}" -C "${browserDir}"`);
 
       console.log(`Browser restored from backup: ${backupId}`);

@@ -1,11 +1,9 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu, MenuItem } from "electron";
 import { join } from "node:path";
 import { prepareNext } from "sc-prepare-next";
 import { cleanupEnhancedBrowserServiceHandlers, initializeEnhancedBrowserServiceHandlers } from "./browser-service-handlers.js";
 import { PORT } from "./constants/index.js";
-import { getDatabase } from "./database/index.js";
-import { cleanupBrowserUseHandlers, initializeBrowserUseHandlers } from "./handlers/browser-use-handlers.js";
-import { getBrowserUseService } from "./services/browser-use-service.js";
+import { getDatabase, closeDatabase } from "./database/index.js";
 import { tokenService } from "./services/token-service.js";
 import { cleanupGeneralHandlers, initializeGeneralHandlers } from "./handlers/general-handlers.js";
 import { cleanupProfileHandlers, initializeProfileHandlers, setMainWindow } from "./handlers/profile-handlers.js";
@@ -49,6 +47,23 @@ function createWindow(): void {
   // Initialize auto-updater after window is created
   initializeAutoUpdater(win);
 
+  // Enable right-click context menu for input fields
+  win.webContents.on('context-menu', (_event, params) => {
+    const menu = new Menu();
+
+    if (params.isEditable) {
+      menu.append(new MenuItem({ label: 'Cắt', role: 'cut', enabled: params.editFlags.canCut }));
+      menu.append(new MenuItem({ label: 'Sao chép', role: 'copy', enabled: params.editFlags.canCopy }));
+      menu.append(new MenuItem({ label: 'Dán', role: 'paste', enabled: params.editFlags.canPaste }));
+      menu.append(new MenuItem({ type: 'separator' }));
+      menu.append(new MenuItem({ label: 'Chọn tất cả', role: 'selectAll', enabled: params.editFlags.canSelectAll }));
+      menu.popup();
+    } else if (params.selectionText) {
+      menu.append(new MenuItem({ label: 'Sao chép', role: 'copy' }));
+      menu.popup();
+    }
+  });
+
   win.maximize();
 
   if (app.isPackaged) {
@@ -81,25 +96,12 @@ app.whenReady().then(async () => {
   initializeGeneralHandlers();
   initializeProfileHandlers();
   initializeEnhancedBrowserServiceHandlers();
-  initializeBrowserUseHandlers();
 
   // Step 3: Prepare frontend and create window
   await prepareNext("./src", PORT);
   createWindow();
 
   console.log('✅ [Startup] App window created successfully');
-
-  // Step 4: Initialize background services
-  const browserUseSvc = getBrowserUseService();
-  browserUseSvc.start().then((started: boolean) => {
-    if (started) {
-      console.log('✅ [Startup] Browser-Use service started successfully');
-    } else {
-      console.warn('⚠️ [Startup] Browser-Use service failed to start (will retry on first use)');
-    }
-  }).catch((error: Error) => {
-    console.error('❌ [Startup] Browser-Use service error:', error);
-  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -110,20 +112,28 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
-    cleanupAllHandlers();
     app.quit();
   }
 });
 
-app.on("before-quit", () => {
-  cleanupAllHandlers();
+let cleanedUp = false;
+app.on("before-quit", (event) => {
+  if (!cleanedUp) {
+    event.preventDefault();
+    cleanupAllHandlers()
+      .catch((err) => console.error('Cleanup error:', err))
+      .finally(() => {
+        cleanedUp = true;
+        app.quit();
+      });
+  }
 });
 
-function cleanupAllHandlers(): void {
+async function cleanupAllHandlers(): Promise<void> {
   console.log('🧹 Cleaning up all services...');
   cleanupProfileHandlers();
   cleanupGeneralHandlers();
   cleanupAutoUpdater();
   cleanupEnhancedBrowserServiceHandlers();
-  cleanupBrowserUseHandlers();
+  await closeDatabase();
 }

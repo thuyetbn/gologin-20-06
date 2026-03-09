@@ -16,23 +16,20 @@ const BrowserDownloadPage: React.FC = () => {
   const [downloadProgress, setDownloadProgress] = useState<BrowserDownloadProgress>({
     stage: 'checking',
     progress: 0,
-    message: 'Initializing download...'
+    message: 'Đang khởi tạo tải xuống...'
   });
 
   useEffect(() => {
     // Listen for download progress from main process
-    if (typeof window !== 'undefined' && (window as any).api) {
-      const handleProgress = (event: any, progress: BrowserDownloadProgress) => {
+    if (typeof window !== 'undefined' && window.api) {
+      const handleProgress = (_event: unknown, progress: BrowserDownloadProgress) => {
         setDownloadProgress(progress);
       };
 
-      (window as any).api.on('browser-download-progress', handleProgress);
+      window.api.on('browser-download-progress', handleProgress);
 
       return () => {
-        // Cleanup listener (if API supports removeListener)
-        if ((window as any).api.removeListener) {
-          (window as any).api.removeListener('browser-download-progress', handleProgress);
-        }
+        window.api.removeListener('browser-download-progress', handleProgress);
       };
     }
   }, []);
@@ -60,7 +57,7 @@ const BrowserDownloadPage: React.FC = () => {
   };
 
   const closeWindow = () => {
-    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+    if (typeof window !== 'undefined' && window.electronAPI) {
       window.close();
     }
   };
@@ -71,8 +68,8 @@ const BrowserDownloadPage: React.FC = () => {
         <CardHeader className="text-center pb-4">
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <CardTitle className="text-2xl font-bold mb-2">Browser Update</CardTitle>
-              <p className="text-muted-foreground">Downloading and installing Orbita Browser</p>
+              <CardTitle className="text-2xl font-bold mb-2">Cập nhật Browser</CardTitle>
+              <p className="text-muted-foreground">Đang tải và cài đặt Orbita Browser</p>
             </div>
             {downloadProgress.stage === 'completed' || downloadProgress.stage === 'error' ? (
               <Button 
@@ -96,12 +93,12 @@ const BrowserDownloadPage: React.FC = () => {
             
             <div className="text-center">
               <h3 className={`text-lg font-semibold ${getStageColor()}`}>
-                {downloadProgress.stage === 'checking' && 'Checking Requirements'}
-                {downloadProgress.stage === 'downloading' && 'Downloading Browser'}
-                {downloadProgress.stage === 'extracting' && 'Extracting Files'}
-                {downloadProgress.stage === 'installing' && 'Installing Browser'}
-                {downloadProgress.stage === 'completed' && 'Installation Complete'}
-                {downloadProgress.stage === 'error' && 'Installation Failed'}
+                {downloadProgress.stage === 'checking' && 'Đang kiểm tra yêu cầu'}
+                {downloadProgress.stage === 'downloading' && 'Đang tải Browser'}
+                {downloadProgress.stage === 'extracting' && 'Đang giải nén'}
+                {downloadProgress.stage === 'installing' && 'Đang cài đặt'}
+                {downloadProgress.stage === 'completed' && 'Cài đặt hoàn tất'}
+                {downloadProgress.stage === 'error' && 'Cài đặt thất bại'}
               </h3>
               <p className="text-sm text-muted-foreground mt-1">
                 {downloadProgress.message}
@@ -117,7 +114,7 @@ const BrowserDownloadPage: React.FC = () => {
                 className="w-full h-3"
               />
               <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Progress</span>
+                <span>Tiến trình</span>
                 <span>{Math.round(downloadProgress.progress)}%</span>
               </div>
             </div>
@@ -127,7 +124,7 @@ const BrowserDownloadPage: React.FC = () => {
           {downloadProgress.stage === 'error' && downloadProgress.error && (
             <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <h4 className="text-sm font-semibold text-red-800 dark:text-red-400 mb-2">
-                Error Details:
+                Chi tiết lỗi:
               </h4>
               <p className="text-sm text-red-700 dark:text-red-300">
                 {downloadProgress.error}
@@ -139,10 +136,10 @@ const BrowserDownloadPage: React.FC = () => {
           {downloadProgress.stage === 'completed' && (
             <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-center">
               <h4 className="text-sm font-semibold text-green-800 dark:text-green-400 mb-2">
-                🎉 Update Successful!
+                Cập nhật thành công!
               </h4>
               <p className="text-sm text-green-700 dark:text-green-300">
-                Browser has been updated to the latest version. You can now close this window.
+                Browser đã được cập nhật lên phiên bản mới nhất. Bạn có thể đóng cửa sổ này.
               </p>
             </div>
           )}
@@ -155,7 +152,7 @@ const BrowserDownloadPage: React.FC = () => {
                 variant={downloadProgress.stage === 'completed' ? 'default' : 'destructive'}
                 className="w-full"
               >
-                {'Close'}
+                {'Đóng'}
               </Button>
             </div>
           )}

@@ -6,6 +6,13 @@ import { getDatabase } from "../database/index.js";
 import { unixToLDAP } from "../gologin/cookies/cookies-manager.js";
 import { tokenService } from "../services/token-service.js";
 import { retryWithTokenRotation } from "../utils/retry.js";
+import {
+  validate,
+  profileIdSchema,
+  profileCreateSchema,
+  profileUpdateSchema,
+  importCookieSchema,
+} from "../utils/validation.js";
 import store from "../store.js";
 
 const { GoLogin, GologinApi } = require('../gologin/gologin.js');
@@ -105,15 +112,18 @@ const isProcessRunning = (pid: number): boolean => {
   }
 };
 
+let lastCleanupTime = 0;
+const CLEANUP_THROTTLE_MS = 30000; // 30 seconds
+
 const performManualCleanup = () => {
-  const profilesToCleanup: string[] = [];
+  const profilesToCleanup = new Set<string>();
 
   runningProfiles.forEach((data, profileId) => {
     if (data.goLogin.processSpawned) {
       const pid = data.goLogin.processSpawned.pid;
       if (pid && !isProcessRunning(pid)) {
         console.log(`Process ${pid} for profile ${profileId} is no longer running`);
-        profilesToCleanup.push(profileId);
+        profilesToCleanup.add(profileId);
       }
     }
   });
@@ -132,7 +142,7 @@ const performManualCleanup = () => {
         if (runningProfile.goLogin.processSpawned) {
           const pid = runningProfile.goLogin.processSpawned.pid;
           if (pid && !isProcessRunning(pid)) {
-            profilesToCleanup.push(profileId);
+            profilesToCleanup.add(profileId);
           }
         }
       }
@@ -152,7 +162,7 @@ const performManualCleanup = () => {
     updateBrowserStatus(profileId, { status: 'stopped' });
   });
 
-  return profilesToCleanup.length;
+  return profilesToCleanup.size;
 };
 
 // ── Helpers ──
@@ -202,7 +212,12 @@ async function launchProfileBrowser(profileId: string): Promise<{
   const profile = await Profile.findOne({ where: { Id: profileId } });
   if (!profile) throw new Error("Profile not found");
 
-  const profileData = JSON.parse(profile.get('JsonData') as string);
+  let profileData: any;
+  try {
+    profileData = JSON.parse(profile.get('JsonData') as string);
+  } catch {
+    throw new Error(`Profile ${profileId} has invalid or missing JsonData`);
+  }
 
   // Ensure navigator exists and resolution is set to 1920x1080
   if (!profileData.navigator) {
@@ -248,15 +263,6 @@ async function launchProfileBrowser(profileId: string): Promise<{
       cleanupRunningProfile(profileId, `Process error: ${error.message}`);
       updateBrowserStatus(profileId, { status: 'crashed' });
     });
-
-    goLogin.processSpawned.on('close', (code: number, signal: string) => {
-      console.log(`Browser process for profile ${profileId} closed with code ${code}, signal ${signal}`);
-      goLogin.sanitizeProfile().then(() => {
-        console.log(`🧹 Auto-cleared cache for profile ${profileId}`);
-      }).catch(() => { });
-      cleanupRunningProfile(profileId, `Process closed (code: ${code}, signal: ${signal})`);
-      updateBrowserStatus(profileId, { status: 'stopped' });
-    });
   }
 
   return {
@@ -285,6 +291,7 @@ export function initializeProfileHandlers(): void {
 
   // ── Create profile ──
   ipcMain.handle("profiles:create", async (_event, profileData) => {
+    const validated = await validate(profileCreateSchema, profileData);
     let profileId: string | null = null;
 
     try {
@@ -296,17 +303,8 @@ export function initializeProfileHandlers(): void {
         throw new Error("GoLogin token not found. Please configure it in Settings.");
       }
 
-      if (!profileData.Name || profileData.Name.trim().length === 0) {
-        throw new Error("Profile name is required.");
-      }
-
-      const trimmedName = profileData.Name.trim();
-      if (trimmedName.length > 50) {
-        throw new Error("Profile name must be 50 characters or less.");
-      }
-
-      profileData.Name = trimmedName;
-      console.log(`Creating profile: ${profileData.Name}`);
+      console.log(`Creating profile: ${validated.Name}`);
+      profileData.Name = validated.Name; // Use trimmed name from validation
 
       const profileGologin = await retryWithTokenRotation(
         async (token: string) => {
@@ -451,46 +449,48 @@ export function initializeProfileHandlers(): void {
 
   // ── Launch profile ──
   ipcMain.handle("profiles:launch", async (_event, profileId) => {
+    const validatedId = await validate(profileIdSchema, profileId);
     try {
-      return await launchProfileBrowser(profileId);
+      return await launchProfileBrowser(validatedId);
     } catch (error: any) {
-      updateBrowserStatus(profileId, { status: 'crashed' });
+      updateBrowserStatus(validatedId, { status: 'crashed' });
       throw error;
     }
   });
 
   // ── Stop profile ──
   ipcMain.handle("profiles:stop", async (_event, profileId) => {
+    const validatedId = await validate(profileIdSchema, profileId);
     try {
-      updateBrowserStatus(profileId, { status: 'stopping' });
+      updateBrowserStatus(validatedId, { status: 'stopping' });
 
-      const runningProfile = runningProfiles.get(profileId);
+      const runningProfile = runningProfiles.get(validatedId);
       if (!runningProfile) {
-        throw new Error(`Profile ${profileId} is not currently running`);
+        throw new Error(`Profile ${validatedId} is not currently running`);
       }
 
       const { goLogin } = runningProfile;
 
       if (goLogin.processSpawned) {
         goLogin.processSpawned.kill('SIGTERM');
-        console.log(`Killed process for profile ${profileId}`);
+        console.log(`Killed process for profile ${validatedId}`);
       }
 
       try {
         await goLogin.sanitizeProfile();
-        console.log(`🧹 Cleared cache for profile ${profileId}`);
+        console.log(`🧹 Cleared cache for profile ${validatedId}`);
       } catch (cacheError: any) {
-        console.warn(`⚠️ Failed to clear cache for profile ${profileId}:`, cacheError.message);
+        console.warn(`⚠️ Failed to clear cache for profile ${validatedId}:`, cacheError.message);
       }
 
-      cleanupRunningProfile(profileId, 'Stopped manually');
-      cleanupBrowserStatus(profileId);
+      cleanupRunningProfile(validatedId, 'Stopped manually');
+      cleanupBrowserStatus(validatedId);
 
-      console.log(`Profile ${profileId} stopped successfully`);
+      console.log(`Profile ${validatedId} stopped successfully`);
       return { status: 'success', message: 'Profile stopped successfully' };
     } catch (error: any) {
-      console.error(`Error stopping profile ${profileId}:`, error);
-      updateBrowserStatus(profileId, { status: 'crashed' });
+      console.error(`Error stopping profile ${validatedId}:`, error);
+      updateBrowserStatus(validatedId, { status: 'crashed' });
       throw new Error(`Failed to stop profile: ${error.message}`);
     }
   });
@@ -522,41 +522,44 @@ export function initializeProfileHandlers(): void {
 
   // ── Restart browser ──
   ipcMain.handle("profiles:restartBrowser", async (_event, profileId) => {
+    const validatedId = await validate(profileIdSchema, profileId);
     try {
-      if (runningProfiles.has(profileId)) {
-        updateBrowserStatus(profileId, { status: 'stopping' });
+      if (runningProfiles.has(validatedId)) {
+        updateBrowserStatus(validatedId, { status: 'stopping' });
 
-        const runningProfile = runningProfiles.get(profileId);
+        const runningProfile = runningProfiles.get(validatedId);
         if (runningProfile?.goLogin.processSpawned) {
           runningProfile.goLogin.processSpawned.kill('SIGTERM');
         }
 
-        cleanupRunningProfile(profileId, 'Restarting');
-        cleanupBrowserStatus(profileId);
+        cleanupRunningProfile(validatedId, 'Restarting');
+        cleanupBrowserStatus(validatedId);
       }
 
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      return await launchProfileBrowser(profileId);
+      return await launchProfileBrowser(validatedId);
     } catch (error: any) {
-      console.error(`Error restarting profile ${profileId}:`, error);
-      updateBrowserStatus(profileId, { status: 'crashed' });
+      console.error(`Error restarting profile ${validatedId}:`, error);
+      updateBrowserStatus(validatedId, { status: 'crashed' });
       throw new Error(`Failed to restart profile: ${error.message}`);
     }
   });
 
   // ── Get running profiles ──
   ipcMain.handle("profiles:getRunning", async () => {
-    const cleanedCount = performManualCleanup();
-    if (cleanedCount > 0) {
-      console.log(`🧹 Manual cleanup removed ${cleanedCount} dead profiles`);
+    // Throttle cleanup to at most once every 30s
+    const now = Date.now();
+    if (now - lastCleanupTime >= CLEANUP_THROTTLE_MS) {
+      lastCleanupTime = now;
+      const cleanedCount = performManualCleanup();
+      if (cleanedCount > 0) {
+        console.log(`🧹 Manual cleanup removed ${cleanedCount} dead profiles`);
+      }
     }
 
+    // After cleanup, remaining entries are known-alive — no need to recheck isProcessRunning
     const running = Array.from(runningProfiles.entries())
-      .filter(([_, data]) => {
-        const pid = data.goLogin.processSpawned?.pid;
-        return pid && isProcessRunning(pid);
-      })
       .map(([profileId, data]) => ({
         profileId,
         port: data.port,
@@ -570,8 +573,9 @@ export function initializeProfileHandlers(): void {
 
   // ── Update profile ──
   ipcMain.handle("profiles:update", async (_event, profileData) => {
+    const validated = await validate(profileUpdateSchema, profileData);
     const { Profile } = await getDatabase();
-    const { Id, ...data } = profileData;
+    const { Id, ...data } = validated;
 
     try {
       if (data.JsonData) {
@@ -617,11 +621,12 @@ export function initializeProfileHandlers(): void {
 
   // ── Delete profile ──
   ipcMain.handle("profiles:delete", async (_event, profileId) => {
+    const validatedId = await validate(profileIdSchema, profileId);
     const { Profile, profilesPath } = await getDatabase();
 
-    const profile = await Profile.findOne({ where: { Id: profileId } });
+    const profile = await Profile.findOne({ where: { Id: validatedId } });
     if (!profile) {
-      throw new Error(`Profile with ID ${profileId} not found.`);
+      throw new Error(`Profile with ID ${validatedId} not found.`);
     }
 
     const profilePath = (profile as any).ProfilePath;
@@ -644,37 +649,39 @@ export function initializeProfileHandlers(): void {
         }
       }
 
-      const deleteResult = await Profile.destroy({ where: { Id: profileId } });
+      const deleteResult = await Profile.destroy({ where: { Id: validatedId } });
       if (deleteResult === 0) {
-        throw new Error(`Failed to delete profile ${profileId} from database`);
+        throw new Error(`Failed to delete profile ${validatedId} from database`);
       }
 
-      console.log(`Successfully deleted profile ${profileId} from database`);
+      console.log(`Successfully deleted profile ${validatedId} from database`);
       return true;
 
     } catch (error: any) {
-      console.error(`Error deleting profile ${profileId}:`, error);
+      console.error(`Error deleting profile ${validatedId}:`, error);
       throw new Error(`Failed to delete profile: ${error.message}`);
     }
   });
 
   // ── Export cookies ──
-  ipcMain.handle("profiles:exportCookie", async (_event, profileId: string) => {
+  ipcMain.handle("profiles:exportCookie", async (_event, profileId) => {
+    const validatedId = await validate(profileIdSchema, profileId);
     const { profilesPath } = await getDatabase();
     const token = await tokenService.getCurrentToken();
     if (!token) {
       throw new Error("GoLogin token not found. Please configure it in Settings.");
     }
 
-    const goLogin = new GoLogin({ token, profile_id: profileId, tmpdir: profilesPath });
-    const secondaryCookiePath = path.join(profilesPath, `gologin_profile_${profileId}`, 'Default', 'Network', 'Cookies');
+    const goLogin = new GoLogin({ token, profile_id: validatedId, tmpdir: profilesPath });
+    const secondaryCookiePath = path.join(profilesPath, `gologin_profile_${validatedId}`, 'Default', 'Network', 'Cookies');
     const cookies = await goLogin.GetCookieCustome(secondaryCookiePath);
 
     return JSON.stringify(cookies, null, 2);
   });
 
   // ── Import cookies ──
-  ipcMain.handle("profiles:importCookie", async (_event, { profileId, rawCookies }) => {
+  ipcMain.handle("profiles:importCookie", async (_event, data) => {
+    const { profileId, rawCookies } = await validate(importCookieSchema, data);
     const cookies = Array.isArray(rawCookies)
       ? rawCookies
       : (typeof rawCookies === 'object' && rawCookies !== null) ? [rawCookies] : null;
@@ -690,7 +697,12 @@ export function initializeProfileHandlers(): void {
       throw new Error(`Profile with ID ${profileId} not found or has no path.`);
     }
 
-    const profileJson = JSON.parse((profile as any).JsonData || '{}');
+    let profileJson: any;
+    try {
+      profileJson = JSON.parse((profile as any).JsonData || '{}');
+    } catch {
+      profileJson = {};
+    }
     let createTableQuery = profileJson.createCookiesTableQuery;
 
     if (!createTableQuery) {
@@ -863,6 +875,19 @@ const PROFILE_HANDLER_CHANNELS = [
 ];
 
 export function cleanupProfileHandlers(): void {
+  // Kill all running browser processes before cleanup
+  runningProfiles.forEach((entry, profileId) => {
+    try {
+      if (entry.goLogin?.processSpawned?.pid) {
+        const pid = entry.goLogin.processSpawned.pid;
+        console.log(`🔪 Killing browser process for profile ${profileId} (PID: ${pid})`);
+        process.kill(pid, 'SIGTERM');
+      }
+    } catch (e) {
+      // Process may have already exited
+    }
+  });
+
   // Cleanup browser connections
   browserStatusMap.forEach((status) => {
     if (status.wsConnection) {

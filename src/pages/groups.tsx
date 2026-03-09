@@ -34,21 +34,88 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { useCachedData } from "@/hooks/use-cached-data";
+import { useCachedData, type Profile, type Group } from "@/hooks/use-cached-data";
 
-import { ArrowUpDown, Folder, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { Folder, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDebounce } from "use-debounce";
 
-// Redefine interface here for simplicity as it's moved to backend
-export interface Group {
-  Id: number;
-  Name: string;
-  Description?: string;
-  CreatedAt?: string;
-  ProfileCount?: number;
+// Extracted outside render to avoid re-creation on every render
+interface GroupCardProps {
+  group: Group;
+  onEdit: (group: Group) => void;
+  onDelete: (groupId: number) => void;
+  deletingGroupId: number | null;
 }
+
+const GroupCard = ({ group, onEdit, onDelete, deletingGroupId }: GroupCardProps) => {
+  return (
+    <Card className="w-full">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 bg-muted rounded-lg flex items-center justify-center">
+              <Folder className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">{group.Name}</CardTitle>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="secondary">
+                  <Users className="w-3 h-3 mr-1" />
+                  {group.ProfileCount || 0} profiles
+                </Badge>
+              </div>
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => onEdit(group)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Sửa
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onDelete(group.Id)}
+                className="text-red-500"
+                disabled={deletingGroupId === group.Id}
+              >
+                {deletingGroupId === group.Id ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                    Đang xóa...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Xóa
+                  </>
+                )}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardHeader>
+
+      {group.Description && (
+        <CardContent className="pt-0">
+          <p className="text-sm text-muted-foreground">{group.Description}</p>
+        </CardContent>
+      )}
+
+      <CardFooter className="pt-0">
+        <div className="text-xs text-muted-foreground">
+          Ngày tạo: {group.CreatedAt ? new Date(group.CreatedAt).toLocaleDateString('vi-VN') : "N/A"}
+        </div>
+      </CardFooter>
+    </Card>
+  );
+};
 
 const GroupsPage = () => {
   // Use optimized cached data hook
@@ -71,10 +138,6 @@ const GroupsPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
 
-  // Pagination state  
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
@@ -84,7 +147,7 @@ const GroupsPage = () => {
     // Add profile counts to groups
     const groupsWithCount = allGroups.map((group: Group) => ({
       ...group,
-      ProfileCount: profiles.filter((p: any) => p.GroupId === group.Id).length,
+      ProfileCount: profiles.filter((p: Profile) => p.GroupId === group.Id).length,
     }));
 
     // Apply search filter
@@ -97,12 +160,6 @@ const GroupsPage = () => {
     return groupsWithCount;
   }, [allGroups, profiles, debouncedSearchQuery]);
 
-  // Replace fetchAllData with refreshCache
-  const fetchAllData = async () => {
-    console.log('🔄 [Groups] Refreshing cached data...');
-    await refreshCache();
-  };
-
   // Remove initial data loading useEffect - handled by useCachedData
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -111,24 +168,26 @@ const GroupsPage = () => {
     
     const rawData = {
       name: formData.get("name") as string,
+      description: formData.get("description") as string,
     };
 
     // Basic input processing
     setFormErrors({});
     
     if (!rawData.name || rawData.name.trim().length === 0) {
-      setFormErrors({ name: "Group name is required" });
+      setFormErrors({ name: "Tên nhóm không được để trống" });
       return;
     }
 
     const trimmedName = rawData.name.trim();
     if (trimmedName.length > 30) {
-      setFormErrors({ name: "Group name must be 30 characters or less" });
+      setFormErrors({ name: "Tên nhóm tối đa 30 ký tự" });
       return;
     }
 
     const groupData = {
-      Name: trimmedName
+      Name: trimmedName,
+      Description: rawData.description?.trim() || '',
     };
 
     setIsSaving(true);
@@ -138,30 +197,33 @@ const GroupsPage = () => {
         await window.api.invoke("groups:update", updatedGroup);
         // Update local cache for instant UI feedback
         updateLocalGroup(updatedGroup);
-        toast.success("Group updated successfully!");
+        toast.success("Cập nhật nhóm thành công!");
       } else {
-        const newGroup = await window.api.invoke("groups:create", groupData);
-        // Add to local cache for instant UI feedback  
+        const newGroupId = await window.api.invoke("groups:create", groupData);
+        // Construct proper Group object from returned ID
+        const newGroup = { Id: newGroupId, Name: groupData.Name, Description: groupData.Description, CreatedAt: new Date().toISOString() };
+        // Add to local cache for instant UI feedback
         addLocalGroup(newGroup);
-        toast.success("Group created successfully!");
+        toast.success("Tạo nhóm thành công!");
       }
       closeDialog();
     } catch (error: any) {
-      toast.error(error.message || "Failed to save group");
+      toast.error(error.message || "Lưu nhóm thất bại");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async (groupId: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa nhóm này?')) return;
     setDeletingGroupId(groupId);
     try {
       await window.api.invoke("groups:delete", groupId);
       // Remove from local cache for instant UI feedback
       removeLocalGroup(groupId);
-      toast.success("Group deleted successfully!");
+      toast.success("Xóa nhóm thành công!");
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete group");
+      toast.error(error.message || "Xóa nhóm thất bại");
       // Refresh cache if delete failed
       await refreshCache();
     } finally {
@@ -180,96 +242,27 @@ const GroupsPage = () => {
     setFormErrors({});
   };
 
-  // Mobile Card Component
-  const GroupCard = ({ group }: { group: Group }) => {
-    return (
-      <Card className="w-full">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 bg-muted rounded-lg flex items-center justify-center">
-                <Folder className="h-5 w-5" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">{group.Name}</CardTitle>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="secondary">
-                    <Users className="w-3 h-3 mr-1" />
-                    {group.ProfileCount || 0} profiles
-                  </Badge>
-                </div>
-              </div>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => openDialog(group)}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleDelete(group.Id)}
-                  className="text-red-500"
-                  disabled={deletingGroupId === group.Id}
-                >
-                  {deletingGroupId === group.Id ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                      Deleting...
-                    </>
-                  ) : (
-                    <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                    </>
-                  )}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardHeader>
-        
-        {group.Description && (
-          <CardContent className="pt-0">
-            <p className="text-sm text-muted-foreground">{group.Description}</p>
-          </CardContent>
-        )}
-        
-        <CardFooter className="pt-0">
-          <div className="text-xs text-muted-foreground">
-            Created: {group.CreatedAt ? new Date(group.CreatedAt).toLocaleDateString() : "N/A"}
-          </div>
-        </CardFooter>
-      </Card>
-    );
-  };
-
   return (
     <div className="p-4 md:p-8 pt-16 md:pt-8">
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <CardTitle>Groups</CardTitle>
+              <CardTitle>Nhóm</CardTitle>
               <CardDescription>
-                Organize your profiles into groups. ({allGroups.length} groups)
+                Sắp xếp profiles theo nhóm. ({allGroups.length} nhóm)
               </CardDescription>
             </div>
             <Button onClick={() => openDialog()}>
               <Plus className="mr-2 h-4 w-4" />
-              Create Group
+              Tạo nhóm
             </Button>
           </div>
           
           {/* Search */}
           <div className="mt-4">
             <Input
-              placeholder="Search groups..."
+              placeholder="Tìm kiếm nhóm..."
               className="max-w-sm"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -284,13 +277,11 @@ const GroupsPage = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>
-                    <Button variant="ghost">
-                      Name <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
+                    Tên
                   </TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Profile Count</TableHead>
-                  <TableHead>Created At</TableHead>
+                  <TableHead>Mô tả</TableHead>
+                  <TableHead>Số profiles</TableHead>
+                  <TableHead>Ngày tạo</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
@@ -305,7 +296,7 @@ const GroupsPage = () => {
                     </TableCell>
                     <TableCell className="max-w-md">
                       <p className="text-sm text-muted-foreground truncate">
-                        {group.Description || "No description"}
+                        {group.Description || "Không có mô tả"}
                       </p>
                     </TableCell>
                     <TableCell>
@@ -325,10 +316,10 @@ const GroupsPage = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
                           <DropdownMenuItem onClick={() => openDialog(group)}>
                             <Pencil className="mr-2 h-4 w-4" />
-                            Edit
+                            Sửa
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDelete(group.Id)}
@@ -338,12 +329,12 @@ const GroupsPage = () => {
                             {deletingGroupId === group.Id ? (
                               <>
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                                Deleting...
+                                Đang xóa...
                               </>
                             ) : (
                               <>
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
+                            Xóa
                               </>
                             )}
                           </DropdownMenuItem>
@@ -359,7 +350,7 @@ const GroupsPage = () => {
           {/* Mobile Card View */}
           <div className="lg:hidden grid gap-4 sm:grid-cols-2">
             {processedGroups.map((group) => (
-              <GroupCard key={group.Id} group={group} />
+              <GroupCard key={group.Id} group={group} onEdit={openDialog} onDelete={handleDelete} deletingGroupId={deletingGroupId} />
             ))}
           </div>
 
@@ -367,9 +358,9 @@ const GroupsPage = () => {
           {processedGroups.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <Folder className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p>No groups found</p>
+              <p>Không tìm thấy nhóm nào</p>
               <Button onClick={() => openDialog()} className="mt-4" variant="outline">
-                Create your first group
+                Tạo nhóm đầu tiên
               </Button>
             </div>
           )}
@@ -377,7 +368,7 @@ const GroupsPage = () => {
         
         <CardFooter>
           <div className="text-xs text-muted-foreground">
-            Showing <strong>{processedGroups.length}</strong> of <strong>{allGroups.length}</strong> groups.
+            Hiển thị <strong>{processedGroups.length}</strong> / <strong>{allGroups.length}</strong> nhóm.
           </div>
         </CardFooter>
       </Card>
@@ -388,19 +379,19 @@ const GroupsPage = () => {
           <form onSubmit={handleSave}>
             <DialogHeader>
               <DialogTitle>
-                {currentGroup ? "Edit Group" : "Create New Group"}
+                {currentGroup ? "Sửa nhóm" : "Tạo nhóm mới"}
               </DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Group Name</Label>
+                <Label htmlFor="name">Tên nhóm</Label>
                 <Input 
                   id="name" 
                   name="name" 
                   defaultValue={currentGroup?.Name} 
                   required 
                   maxLength={30}
-                  placeholder="Enter group name (letters, numbers, spaces, -, _)"
+                  placeholder="Nhập tên nhóm (chữ, số, dấu cách, -, _)"
                   className={formErrors.name ? "border-red-500" : ""}
                 />
                 {formErrors.name && (
@@ -408,28 +399,28 @@ const GroupsPage = () => {
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description">Description (Optional)</Label>
+                <Label htmlFor="description">Mô tả (Tùy chọn)</Label>
                 <Textarea
                   id="description"
                   name="description"
                   defaultValue={currentGroup?.Description}
-                  placeholder="Enter group description"
+                  placeholder="Nhập mô tả nhóm"
                   rows={3}
                 />
               </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog} disabled={isSaving}>
-                Cancel
+                Hủy
               </Button>
               <Button type="submit" disabled={isSaving}>
                 {isSaving ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Saving...
+                    Đang lưu...
                   </>
                 ) : (
-                  "Save"
+                  "Lưu"
                 )}
               </Button>
             </DialogFooter>

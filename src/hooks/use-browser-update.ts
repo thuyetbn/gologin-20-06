@@ -1,5 +1,5 @@
-import { useToast } from '@/hooks/use-toast';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 interface UpdateInfo {
   currentVersion: string;
@@ -9,7 +9,6 @@ interface UpdateInfo {
 }
 
 export const useBrowserUpdate = () => {
-  const { toast } = useToast();
   const [hasUpdate, setHasUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [showDialog, setShowDialog] = useState(false);
@@ -17,65 +16,44 @@ export const useBrowserUpdate = () => {
 
   useEffect(() => {
     // Listen for browser update notifications from main process
-    if (typeof window !== 'undefined' && (window as any).api) {
-      const handleUpdateAvailable = (event: any, info: UpdateInfo) => {
+    if (typeof window !== 'undefined' && window.api) {
+      const handleUpdateAvailable = (_event: unknown, info: UpdateInfo) => {
         console.log('Browser update available:', info);
         setHasUpdate(true);
         setUpdateInfo(info);
         setShowDialog(true);
-        
-        // Show toast notification
-        toast({
-          title: "🆕 Có bản cập nhật Browser mới!",
-          description: `Version ${info.latestVersion} đã có sẵn. Click để cập nhật.`,
-          variant: "default",
-          duration: 8000,
-        });
+
+        toast.info(`Có bản cập nhật Browser mới! Version ${info.latestVersion} đã có sẵn.`);
       };
 
-      (window as any).api.on('browser-update-available', handleUpdateAvailable);
+      window.api.on('browser-update-available', handleUpdateAvailable);
 
       return () => {
-        // Cleanup listener if supported
-        if ((window as any).api.removeListener) {
-          (window as any).api.removeListener('browser-update-available', handleUpdateAvailable);
+        if (window.api.removeListener) {
+          window.api.removeListener('browser-update-available', handleUpdateAvailable);
         }
       };
     }
-  }, [toast]);
+  }, []);
 
   const performUpdate = async (): Promise<void> => {
     setIsUpdating(true);
     try {
-      if (typeof window !== 'undefined' && (window as any).api) {
-        const result = await (window as any).api.invoke('browser:update-with-progress');
-        
+      if (typeof window !== 'undefined' && window.api) {
+        const result = await window.api.invoke('browser:update-with-progress');
+
         if (result.success) {
-          toast({
-            title: "🎉 Cập nhật thành công!",
-            description: `Browser đã được cập nhật lên version ${result.newVersion}`,
-            variant: "default",
-          });
-          
-          // Reset update state
+          toast.success(`Browser đã được cập nhật lên version ${result.newVersion}`);
           setHasUpdate(false);
           setUpdateInfo(null);
           setShowDialog(false);
         } else {
-          toast({
-            title: "❌ Lỗi cập nhật",
-            description: result.message,
-            variant: "destructive",
-          });
+          toast.error(`Lỗi cập nhật: ${result.message}`);
         }
       }
     } catch (error) {
       console.error('Update failed:', error);
-      toast({
-        title: "❌ Lỗi",
-        description: "Cập nhật thất bại. Vui lòng thử lại.",
-        variant: "destructive",
-      });
+      toast.error("Cập nhật thất bại. Vui lòng thử lại.");
     } finally {
       setIsUpdating(false);
     }
@@ -83,7 +61,6 @@ export const useBrowserUpdate = () => {
 
   const dismissUpdate = () => {
     setShowDialog(false);
-    // Keep hasUpdate true to show the badge until next app restart
   };
 
   return {
@@ -95,4 +72,4 @@ export const useBrowserUpdate = () => {
     dismissUpdate,
     setShowDialog
   };
-}; 
+};

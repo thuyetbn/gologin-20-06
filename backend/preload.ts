@@ -28,55 +28,33 @@ type Channels =
   | "profiles:stop"
   | "profiles:getRunning"
   | "profiles:getAllBrowserStatuses"
+  | "profiles:getBrowserStatus"
   | "profiles:exportCookie"
   | "profiles:importCookie"
   | "profiles:restartBrowser"
-  | "profiles:getAll"
   // Browser Service channels
   | "browser:get-info"
   | "browser:update-with-progress"
+  | "browser:check-for-updates"
   | "browser-status-changed"
+  // Browser event channels (main -> renderer)
+  | "browser-update-progress"
+  | "browser-download-progress"
   // Shell operations
   | "shell:open-path"
   // Database operations
   | "data:setupDatabase"
   | "database:test"
-  // Credential Management channels
-  | "credentials:store"
-  | "credentials:get"
-  | "credentials:list"
-  | "credentials:update"
-  | "credentials:delete"
-  | "credentials:migrate-gologin"
-  | "credentials:import"
-  | "credentials:export"
-  | "credentials:validate"
-  | "credentials:status"
-  | "credentials:clear"
-  | "credentials:test"
-  // Cookie Sync channels
-  | "cookies:get-local-info"
-  | "cookies:upload"
-  | "cookies:download"
-  | "cookies:sync"
-  // Browser-Use AI Agent channels
-  | "browser-use:start"
-  | "browser-use:stop"
-  | "browser-use:health"
-  | "browser-use:status"
-  | "browser-use:run-task"
-  | "browser-use:connect"
-  | "browser-use:disconnect"
   // Auto-Updater channels
   | "updater:check"
   | "updater:download"
   | "updater:install"
   | "updater:get-version"
   | "updater:status"
-  // Keep old ones for now, will be removed later
-  | "get-users"
-  | "delete-user"
-  | "update-user";
+  // Event-only channels (main -> renderer)
+  | "browser-update-available"
+  | "setup-required"
+  | "setup-error";
 
 export const api = {
   /**
@@ -87,9 +65,8 @@ export const api = {
    *                             The callback function will receive two parameters: the event object and the message data.
    */
   on: (channel: Channels, callback: (event: IpcRendererEvent, args: unknown) => void) => {
-    ipcRenderer.on(channel, (event: IpcRendererEvent, args: unknown) =>
-      callback(event, args)
-    );
+    ipcRenderer.on(channel, callback);
+    return callback; // Return reference for removeListener
   },
 
   /**
@@ -132,6 +109,10 @@ export const api = {
    */
   removeAllListeners: (channel: Channels): void => {
     ipcRenderer.removeAllListeners(channel);
+  },
+
+  removeListener: (channel: Channels, callback: (...args: any[]) => void): void => {
+    ipcRenderer.removeListener(channel, callback);
   },
 };
 
